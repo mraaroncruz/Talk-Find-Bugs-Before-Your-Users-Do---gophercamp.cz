@@ -1,0 +1,177 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+usage() {
+  echo ""
+  echo -e "${BLUE}Encroach Observability Demo${NC}"
+  echo -e "${BLUE}════════════════════════════${NC}"
+  echo ""
+  echo "Usage: bin/demo <mode>"
+  echo ""
+  echo "Modes:"
+  echo -e "  ${RED}broken${NC}     Bug ON, no observability   — the 'dark' debugging experience"
+  echo -e "  ${YELLOW}metrics${NC}    Bug ON + Prometheus        — cache hit rate reveals the pattern"
+  echo -e "  ${YELLOW}traces${NC}    Bug ON + OpenTelemetry     — trace waterfall ends at Redis"
+  echo -e "  ${GREEN}full${NC}       Bug ON + everything        — metrics + traces + structured logs"
+  echo -e "  ${GREEN}fixed${NC}      Bug BYPASSED + everything  — force-refresh shows the fix"
+  echo ""
+  echo "Infrastructure:"
+  echo "  up         Start Postgres, Redis, Prometheus, Grafana, OpenObserve"
+  echo "  down       Stop all infrastructure"
+  echo "  build      Build the frontend (done automatically before each mode)"
+  echo "  seed       Generate sample run data to populate dashboards"
+  echo "  reset      Wipe runs, tiles, cache, metrics, and traces"
+  echo "  nuke       Stop everything and destroy all volumes (full fresh start)"
+  echo ""
+  echo "URLs:"
+  echo "  App              http://localhost:3000"
+  echo "  Grafana          http://localhost:3001  (admin/admin)"
+  echo "  OpenObserve      http://localhost:5080  (root@example.com / Complexpass#123)"
+  echo "  Prometheus       http://localhost:9090"
+  echo ""
+}
+
+start_infra() {
+  echo -e "${BLUE}Starting infrastructure...${NC}"
+  docker compose up -d
+  echo -e "${GREEN}Infrastructure ready.${NC}"
+}
+
+stop_infra() {
+  echo -e "${BLUE}Stopping infrastructure...${NC}"
+  docker compose down
+  echo -e "${GREEN}Done.${NC}"
+}
+
+seed_data() {
+  echo -e "${BLUE}Seeding sample runs...${NC}"
+  # Submit several runs for different runners to populate metrics
+  for runner_id in 1 2 3; do
+    tiles="["
+    for i in $(seq 0 4); do
+      for j in $(seq 0 4); do
+        x=$(( (runner_id - 1) * 5 + i ))
+        y=$j
+        [ "$tiles" != "[" ] && tiles="$tiles,"
+        tiles="$tiles[$x,$y]"
+      done
+    done
+    tiles="$tiles]"
+    curl -s -X POST http://localhost:3000/api/runs \
+      -H "Content-Type: application/json" \
+      -d "{\"runner_id\": $runner_id, \"tiles\": $tiles}" > /dev/null
+    echo "  Runner $runner_id: submitted 25 tiles"
+  done
+  echo -e "${GREEN}Seeded. Wait a moment for workers to process.${NC}"
+}
+
+build_frontend() {
+  if [ ! -d "frontend/dist" ] || [ "${1:-}" = "force" ]; then
+    echo -e "${BLUE}Building frontend...${NC}"
+    (cd frontend && npm install --silent && npm run build)
+    echo -e "${GREEN}Frontend built.${NC}"
+  fi
+}
+
+run_mode() {
+  local mode=$1
+
+  case "$mode" in
+    broken)
+      echo -e "${RED}Mode: BROKEN${NC} — bug ON, no observability"
+      export OBSERVABILITY_LEVEL=none
+      export TILE_STALE_CACHE=true
+      ;;
+    metrics)
+      echo -e "${YELLOW}Mode: METRICS${NC} — bug ON + Prometheus"
+      export OBSERVABILITY_LEVEL=metrics
+      export TILE_STALE_CACHE=true
+      ;;
+    traces)
+      echo -e "${YELLOW}Mode: TRACES${NC} — bug ON + OpenTelemetry"
+      export OBSERVABILITY_LEVEL=traces
+      export TILE_STALE_CACHE=true
+      ;;
+    full)
+      echo -e "${GREEN}Mode: FULL${NC} — bug ON + metrics + traces + structured logs"
+      export OBSERVABILITY_LEVEL=full
+      export TILE_STALE_CACHE=true
+      ;;
+    fixed)
+      echo -e "${GREEN}Mode: FIXED${NC} — cache invalidation restored + full observability"
+      export OBSERVABILITY_LEVEL=full
+      export TILE_STALE_CACHE=false
+      ;;
+    *)
+      echo -e "${RED}Unknown mode: $mode${NC}"
+      usage
+      exit 1
+      ;;
+  esac
+
+  build_frontend
+
+  export OTEL_EXPORTER_OTLP_ENDPOINT=localhost:5080
+  export OTEL_EXPORTER_OTLP_HEADERS="Authorization=Basic $(echo -n 'root@example.com:Complexpass#123' | base64)"
+  export DATABASE_URL=postgres://postgres:postgres@localhost:5432/encroach_demo?sslmode=disable
+  export REDIS_URL=redis://localhost:6379/0
+
+  echo ""
+  echo "Starting server on :3000..."
+  echo "Press Ctrl+C to stop."
+  echo ""
+
+  go run ./cmd/server
+}
+
+reset_data() {
+  echo -e "${YELLOW}Resetting all data...${NC}"
+
+  # Database
+  echo "  Clearing runs and tile claims..."
+  docker compose exec -T postgres psql -U postgres -d encroach_demo -c "DELETE FROM tile_claims; DELETE FROM runs;" 2>/dev/null
+
+  # Redis cache
+  echo "  Clearing Redis cache..."
+  docker compose exec -T redis redis-cli DEL territory:grid 2>/dev/null
+
+  # Prometheus TSDB — delete all series, then clean tombstones
+  echo "  Wiping Prometheus metrics..."
+  curl -sf -X POST 'http://localhost:9090/api/v1/admin/tsdb/delete_series?match[]={__name__=~".+"}' >/dev/null 2>&1
+  curl -sf -X POST 'http://localhost:9090/api/v1/admin/tsdb/clean_tombstones' >/dev/null 2>&1
+
+  # OpenObserve — restart to clear in-memory state (WAL-based, volume stays but streams reset)
+  echo "  Restarting OpenObserve..."
+  docker compose restart openobserve >/dev/null 2>&1
+
+  echo -e "${GREEN}Done. Database, cache, metrics, and traces reset.${NC}"
+}
+
+nuke_all() {
+  echo -e "${RED}Nuking everything (volumes will be destroyed)...${NC}"
+  docker compose down -v
+  echo -e "${GREEN}Done. Run 'bin/demo up' to start fresh.${NC}"
+}
+
+# --- Main ---
+case "${1:-}" in
+  up)     start_infra ;;
+  down)   stop_infra ;;
+  build)  build_frontend force ;;
+  seed)   seed_data ;;
+  reset)  reset_data ;;
+  nuke)   nuke_all ;;
+  broken|metrics|traces|full|fixed)
+          run_mode "$1" ;;
+  *)      usage ;;
+esac

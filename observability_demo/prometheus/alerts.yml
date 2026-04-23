@@ -1,0 +1,31 @@
+groups:
+  - name: encroach
+    rules:
+      - alert: TileCacheNotRefreshing
+        expr: |
+          rate(tile_cache_hits_total[5m]) > 0
+          and rate(tile_cache_misses_total[5m]) == 0
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Tile cache hit rate is 100% — nothing is refreshing"
+          description: "The tile cache has had zero misses for over 1 hour. This likely means we're never calling the upstream tile provider and serving stale ownership data."
+
+      - alert: TileCacheStale
+        expr: tile_cache_age_hours > 6
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Tile cache is {{ $value | humanize }} hours old"
+          description: "Cached tile data is older than 6 hours. Ownership overlays may be stale."
+
+      - alert: TileProviderSilent
+        expr: rate(tile_provider_calls_total[1h]) == 0
+        for: 1h
+        labels:
+          severity: critical
+        annotations:
+          summary: "No calls to tile provider in the last hour"
+          description: "The service has stopped calling the upstream tile provider entirely."

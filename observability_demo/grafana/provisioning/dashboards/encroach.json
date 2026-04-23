@@ -1,0 +1,143 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "title": "Request Rate",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 0 },
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum(rate(http_requests_total[1m]))",
+          "legendFormat": "req/s"
+        }
+      ]
+    },
+    {
+      "title": "Error Rate",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 0 },
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum(rate(http_requests_total{status=~\"5..\"}[1m])) / sum(rate(http_requests_total[1m])) * 100",
+          "legendFormat": "error %"
+        }
+      ]
+    },
+    {
+      "title": "Request Latency (p99)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 0 },
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[1m])) by (le))",
+          "legendFormat": "p99"
+        }
+      ]
+    },
+    {
+      "title": "⚠ Tile Cache Hit Rate",
+      "description": "THE KEY PANEL — when this is 100% for hours, something is wrong",
+      "type": "gauge",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 8 },
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 90 },
+              { "color": "red", "value": 99 }
+            ]
+          },
+          "unit": "percent",
+          "min": 0,
+          "max": 100
+        }
+      },
+      "targets": [
+        {
+          "expr": "tile_cache_hits_total / (tile_cache_hits_total + tile_cache_misses_total) * 100",
+          "legendFormat": "hit rate"
+        }
+      ]
+    },
+    {
+      "title": "Tile Cache Age (hours)",
+      "type": "stat",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 8 },
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 4 },
+              { "color": "red", "value": 12 }
+            ]
+          },
+          "unit": "h"
+        }
+      },
+      "targets": [
+        {
+          "expr": "tile_cache_age_hours",
+          "legendFormat": "age"
+        }
+      ]
+    },
+    {
+      "title": "Tile Provider API Calls",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 8 },
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum(rate(tile_provider_calls_total[1m])) by (status)",
+          "legendFormat": "{{ status }}"
+        }
+      ]
+    },
+    {
+      "title": "Runs Processed",
+      "type": "stat",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 16 },
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "runs_processed_total",
+          "legendFormat": "total"
+        }
+      ]
+    },
+    {
+      "title": "Cache Hits vs Misses",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 16, "x": 8, "y": 16 },
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "rate(tile_cache_hits_total[1m])",
+          "legendFormat": "hits/s"
+        },
+        {
+          "expr": "rate(tile_cache_misses_total[1m])",
+          "legendFormat": "misses/s"
+        }
+      ]
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["encroach", "demo"],
+  "templating": { "list": [] },
+  "time": { "from": "now-1h", "to": "now" },
+  "title": "Encroach — Tile Service",
+  "uid": "encroach-tiles"
+}
