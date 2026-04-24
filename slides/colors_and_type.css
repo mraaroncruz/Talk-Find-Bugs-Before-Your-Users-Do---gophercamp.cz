@@ -1,0 +1,236 @@
+/* =========================================================
+   Tech Talk Design System
+   Colors + Type foundations
+   ========================================================= */
+
+/* Brand sans: Source Sans 3 (variable weight 200-900), shipped in ./fonts/ */
+@font-face {
+  font-family: 'Source Sans 3';
+  src: url('fonts/SourceSans3-VariableFont_wght.ttf') format('truetype-variations'),
+       url('fonts/SourceSans3-VariableFont_wght.ttf') format('truetype');
+  font-weight: 200 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Source Sans 3';
+  src: url('fonts/SourceSans3-Italic-VariableFont_wght.ttf') format('truetype-variations'),
+       url('fonts/SourceSans3-Italic-VariableFont_wght.ttf') format('truetype');
+  font-weight: 200 900;
+  font-style: italic;
+  font-display: swap;
+}
+
+/* Caveat (handwritten accent) + JetBrains Mono (numerical display) from Google Fonts —
+   no brand files were supplied for these roles. Swap in local files if needed. */
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Caveat:wght@500;700&display=swap');
+
+:root {
+  /* ---------- PRIMARY PALETTE ----------
+     Pulled from the BrightonSEO-style deck: deep conference blue,
+     electric teal accent, warm yellow, coral red triangles. */
+  --blue-900: #0B2E6E;
+  --blue-800: #11377C;
+  --blue-700: #1A4EB1;   /* primary conference blue */
+  --blue-600: #2D6BD6;
+  --blue-500: #4F8BE8;
+  --blue-400: #85ACEC;
+  --blue-200: #C6D9F5;
+  --blue-100: #E6EEFB;
+
+  --teal-500: #4BC3D8;   /* electric teal accent (the 'handwriting' color) */
+  --teal-400: #7BD4E5;
+  --teal-200: #C3ECF3;
+
+  --yellow-500: #FFD039; /* the yellow triangle wedge */
+  --yellow-400: #FFDE6B;
+
+  --coral-500: #E84C5C;  /* the coral red triangle wedge */
+  --coral-400: #EF7984;
+
+  /* ---------- NEUTRALS ---------- */
+  --ink-900: #0E1626;    /* primary text on light */
+  --ink-700: #2A3346;
+  --ink-500: #5A6478;
+  --ink-400: #8A93A6;
+  --ink-300: #B9C0CF;
+  --ink-200: #DDE2EC;
+  --ink-100: #EEF1F7;
+  --paper:   #FFFFFF;
+  --paper-warm: #FAFAF7;
+
+  /* ---------- SEMANTIC ROLES ---------- */
+  --bg:            var(--paper);
+  --bg-alt:        var(--ink-100);
+  --bg-hero:       var(--blue-700);       /* title / section slides */
+  --bg-hero-alt:   var(--blue-900);
+  --fg:            var(--ink-900);
+  --fg-muted:      var(--ink-500);
+  --fg-subtle:     var(--ink-400);
+  --fg-on-hero:    #FFFFFF;
+  --fg-on-hero-muted: rgba(255,255,255,0.72);
+
+  --accent:        var(--teal-500);       /* the "fun" accent */
+  --accent-warm:   var(--yellow-500);
+  --accent-pop:    var(--coral-500);
+
+  --rule:          var(--ink-200);
+  --rule-strong:   var(--ink-300);
+  --rule-on-hero:  rgba(255,255,255,0.22);
+
+  --link:          var(--blue-700);
+  --link-hover:    var(--blue-800);
+
+  /* ---------- RADII ---------- */
+  --r-xs: 4px;
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 20px;
+  --r-xl: 32px;
+  --r-pill: 999px;
+
+  /* ---------- SHADOWS ---------- */
+  --shadow-sm: 0 1px 2px rgba(14,22,38,0.06), 0 1px 3px rgba(14,22,38,0.05);
+  --shadow-md: 0 4px 12px rgba(14,22,38,0.08), 0 2px 4px rgba(14,22,38,0.05);
+  --shadow-lg: 0 12px 32px rgba(14,22,38,0.14), 0 4px 8px rgba(14,22,38,0.06);
+  --shadow-hero: 0 24px 60px rgba(11,46,110,0.35);
+  --ring-focus: 0 0 0 3px rgba(75,195,216,0.45);
+
+  /* ---------- SPACING ---------- */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+  --sp-7: 48px;
+  --sp-8: 64px;
+  --sp-9: 96px;
+
+  /* ---------- TYPE FAMILIES ----------
+     Source Sans 3 — the brand sans (supplied as variable TTFs in ./fonts/).
+     Humanist sans, loose counters, high legibility at both display + body.
+     Caveat — handwritten script accent (matches the "United Kingdom"
+     handwritten mark on the inspiration deck's cover).
+     JetBrains Mono — for numerical / vector output (e.g. embedding values). */
+  --font-sans:   'Source Sans 3', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-script: 'Caveat', 'Segoe Script', cursive;
+  --font-mono:   'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+  /* ---------- TYPE SCALE (slide-friendly, 1920x1080 base) ----------
+     For web/print, each step scales proportionally via root font-size. */
+  --fs-display:  96px;   /* hero slide title */
+  --fs-title:    64px;   /* slide title */
+  --fs-h1:       48px;
+  --fs-h2:       36px;
+  --fs-h3:       28px;
+  --fs-lead:     28px;   /* body lead on slides */
+  --fs-body:     22px;
+  --fs-small:    18px;
+  --fs-caption:  14px;
+  --fs-eyebrow:  13px;   /* all-caps kickers */
+
+  --lh-tight:   1.08;
+  --lh-snug:    1.2;
+  --lh-normal:  1.45;
+  --lh-relaxed: 1.6;
+
+  --tracking-tight: -0.02em;
+  --tracking-normal: 0;
+  --tracking-wide:  0.04em;
+  --tracking-caps:  0.14em;
+}
+
+/* =========================================================
+   SEMANTIC TYPE PRIMITIVES
+   Use these classes (or the matching CSS var families) as
+   the source of truth for type styling across decks/UIs.
+   ========================================================= */
+
+.t-display {
+  font-family: var(--font-sans);
+  font-size:   var(--fs-display);
+  font-weight: 700;
+  line-height: var(--lh-tight);
+  letter-spacing: var(--tracking-tight);
+  color: var(--fg);
+}
+
+.t-title {
+  font-family: var(--font-sans);
+  font-size:   var(--fs-title);
+  font-weight: 700;
+  line-height: var(--lh-tight);
+  letter-spacing: var(--tracking-tight);
+}
+
+.t-h1 { font-family: var(--font-sans); font-size: var(--fs-h1); font-weight: 700; line-height: var(--lh-snug); letter-spacing: var(--tracking-tight); }
+.t-h2 { font-family: var(--font-sans); font-size: var(--fs-h2); font-weight: 600; line-height: var(--lh-snug); }
+.t-h3 { font-family: var(--font-sans); font-size: var(--fs-h3); font-weight: 600; line-height: var(--lh-snug); }
+
+.t-lead {
+  font-family: var(--font-sans);
+  font-size: var(--fs-lead);
+  font-weight: 400;
+  line-height: var(--lh-normal);
+  color: var(--fg-muted);
+}
+
+.t-body {
+  font-family: var(--font-sans);
+  font-size: var(--fs-body);
+  font-weight: 400;
+  line-height: var(--lh-normal);
+}
+
+.t-small    { font-family: var(--font-sans); font-size: var(--fs-small); line-height: var(--lh-normal); }
+.t-caption  { font-family: var(--font-sans); font-size: var(--fs-caption); line-height: var(--lh-normal); color: var(--fg-muted); }
+
+.t-eyebrow {
+  font-family: var(--font-sans);
+  font-size: var(--fs-eyebrow);
+  font-weight: 600;
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+
+.t-script {
+  font-family: var(--font-script);
+  font-weight: 700;
+  color: var(--accent);
+  line-height: 0.9;
+}
+
+.t-mono {
+  font-family: var(--font-mono);
+  font-feature-settings: 'tnum' 1, 'zero' 1;
+}
+
+/* Quote — big pull quote used on quote slides. */
+.t-quote {
+  font-family: var(--font-sans);
+  font-size: var(--fs-h1);
+  font-weight: 500;
+  line-height: 1.2;
+  letter-spacing: var(--tracking-tight);
+  text-wrap: balance;
+}
+
+/* Stat / numeric display — large numbers for results slides. */
+.t-stat {
+  font-family: var(--font-sans);
+  font-weight: 800;
+  font-size: 120px;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Helpers */
+.on-hero   { color: var(--fg-on-hero); }
+.on-hero-muted { color: var(--fg-on-hero-muted); }
+.text-accent     { color: var(--accent); }
+.text-accent-pop { color: var(--accent-pop); }
+.text-accent-warm{ color: var(--accent-warm); }

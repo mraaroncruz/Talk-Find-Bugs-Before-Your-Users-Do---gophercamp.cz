@@ -1,0 +1,1692 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Finding Bugs Before Your Users Do — Gophercamp CZ 2026</title>
+<link rel="stylesheet" href="colors_and_type.css">
+<link rel="stylesheet" href="slide-styles.css">
+<link rel="stylesheet" href="deck-extras.css?v=3">
+<style>
+  html,body{margin:0;padding:0;background:#000;}
+  deck-stage section { font-family: var(--font-sans); }
+  .slide--hero, .slide--hero * { color: inherit; }
+  .slide--hero { color: var(--fg-on-hero); }
+  .k { color: var(--fg-muted); } .kv { color: var(--ink-900); }
+
+  /* ===== Tweakable text scales ===== */
+  :root {
+    --code-scale: 1;
+    --micro-scale: 1;
+    --trace-scale: 1;
+    --headline-scale: 1;
+    --lead-scale: 1;
+    --list-scale: 1;
+  }
+  /* Code blocks */
+  .code { font-size: calc(26px * var(--code-scale)) !important; line-height: 1.55 !important; }
+  /* Terminal */
+  .terminal-body { font-size: calc(22px * var(--code-scale)) !important; }
+  /* Trace waterfall */
+  .trace { font-size: calc(20px * var(--trace-scale)) !important; }
+  .trace .t-head { font-size: calc(18px * var(--trace-scale)) !important; }
+  .trace .attrs { font-size: calc(20px * var(--trace-scale)) !important; }
+  .trace .span .ms { font-size: calc(14px * var(--trace-scale)) !important; }
+  /* Logs */
+  .log-line { font-size: calc(20px * var(--trace-scale)) !important; }
+  .log-line .kv { font-size: calc(18px * var(--trace-scale)) !important; }
+  /* Alert cards */
+  .alert-card .name { font-size: calc(22px * var(--micro-scale)) !important; }
+  .alert-card .expr { font-size: calc(20px * var(--micro-scale)) !important; }
+  .alert-card .desc { font-size: calc(22px * var(--micro-scale)) !important; }
+  /* Chart + dashboard chrome */
+  .chart .y-axis, .chart .x-axis { font-size: calc(16px * var(--micro-scale)) !important; }
+  .chart .annotation { font-size: calc(18px * var(--micro-scale)) !important; }
+  .dash-card .title { font-size: calc(28px * var(--micro-scale)) !important; }
+  .dash-card .meta { font-size: calc(18px * var(--micro-scale)) !important; }
+  /* Map mock chrome */
+  .map-mock .side { font-size: calc(20px * var(--micro-scale)) !important; }
+  .map-mock .side h4 { font-size: calc(16px * var(--micro-scale)) !important; }
+  .map-mock .bar { font-size: calc(18px * var(--micro-scale)) !important; }
+  .map-mock .app-bar .sub { font-size: calc(18px * var(--micro-scale)) !important; }
+
+  /* Eyebrows / kickers — follow headline scale, bigger base */
+  .eyebrow { font-size: calc(22px * var(--headline-scale)) !important; }
+  .slide-kicker { font-size: calc(18px * var(--headline-scale)) !important; }
+  .knows h3 { font-size: calc(22px * var(--headline-scale)) !important; }
+  .anti .body .fix-head { font-size: calc(22px * var(--headline-scale)) !important; }
+  .rez .group h4 { font-size: calc(22px * var(--headline-scale)) !important; }
+  .week .day .d { font-size: calc(22px * var(--headline-scale)) !important; }
+
+  /* Headlines */
+  .title-xl { font-size: calc(88px * var(--headline-scale)) !important; }
+  .title-lg { font-size: calc(64px * var(--headline-scale)) !important; }
+  .title-md { font-size: calc(48px * var(--headline-scale)) !important; }
+  .anti .body .head { font-size: calc(48px * var(--headline-scale)) !important; }
+  .alert-card .title { font-size: calc(36px * var(--headline-scale)) !important; }
+
+  /* Lead / body paragraphs */
+  .lead { font-size: calc(30px * var(--lead-scale)) !important; }
+
+  /* Lists & list-like rows */
+  .anti .body li { font-size: calc(26px * var(--list-scale)) !important; }
+  .knows li { font-size: calc(26px * var(--list-scale)) !important; }
+  .green-list .row { font-size: calc(26px * var(--list-scale)) !important; }
+  .rez .group li { font-size: calc(26px * var(--list-scale)) !important; }
+  .week .day .what { font-size: calc(32px * var(--list-scale)) !important; }
+  .week .day .what .goal { font-size: calc(22px * var(--list-scale)) !important; }
+  .timeline .row { font-size: calc(28px * var(--list-scale)) !important; }
+
+  /* ===== Tweaks panel ===== */
+  #tweaks-panel {
+    position: fixed; right: 24px; bottom: 24px;
+    background: #0B1220; color: #E6EEFB;
+    border-radius: 12px; padding: 20px 22px;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+    font-family: var(--font-sans);
+    width: 320px; z-index: 9999;
+    display: none;
+  }
+  #tweaks-panel.on { display: block; }
+  #tweaks-panel h3 {
+    margin: 0 0 14px; font-size: 14px; letter-spacing: 0.14em;
+    text-transform: uppercase; font-weight: 700; color: #FFD039;
+  }
+  #tweaks-panel label {
+    display: block; font-size: 13px; color: #A8B5D1;
+    margin: 12px 0 4px; font-weight: 600;
+  }
+  #tweaks-panel .row { display: flex; align-items: center; gap: 12px; }
+  #tweaks-panel input[type=range] { flex: 1; accent-color: #4BC3D8; }
+  #tweaks-panel .val {
+    font-family: var(--font-mono); font-size: 13px;
+    color: #FFD039; min-width: 46px; text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  #tweaks-panel .reset {
+    margin-top: 16px; background: transparent; color: #8A93A6;
+    border: 1px solid rgba(255,255,255,0.1); border-radius: 6px;
+    padding: 8px 14px; font-size: 12px; letter-spacing: 0.08em;
+    text-transform: uppercase; cursor: pointer; width: 100%;
+  }
+  #tweaks-panel .reset:hover { color: #fff; border-color: #4BC3D8; }
+/* demo-slide overrides */
+.demo-slide .slide-kicker { color: #8A93A6 !important; }
+.demo-slide .pill { background: rgba(75,195,216,0.15); color:#4BC3D8; border:1px solid rgba(75,195,216,0.4); }
+</style>
+<script src="deck-stage.js"></script>
+</head>
+<body>
+<deck-stage width="1920" height="1080">
+
+  <!-- ========== 01 TITLE ========== -->
+  <section class="slide slide--hero" data-label="01 Title">
+    <div class="hero-bg"></div><div class="wedge-yellow"></div><div class="wedge-coral"></div>
+    <div class="slide-kicker">Gophercamp CZ &middot; 2026</div>
+    <div class="hero-content">
+      <div style="display:flex; flex-direction:column; gap:40px; align-items:flex-start;">
+        <div class="portrait"><img src="assets/aaron-head.png" alt="Aaron Cruz"></div>
+        <div style="display:flex; flex-direction:column; gap:16px; align-items:center; width:360px;">
+          <div style="font-size:56px; font-weight:700; letter-spacing:-0.02em; line-height:1; color:#fff;">Aaron Cruz</div>
+          <span class="pill">encroach.app</span>
+        </div>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:64px; align-items:flex-start;">
+        <div>
+          <div class="wordmark">Gophercamp<span class="dot">.</span></div>
+          <span class="wordmark-script">Brno &middot; 2026</span>
+        </div>
+        <div class="title-xl" style="color:#fff; font-size:104px;">
+          Finding bugs before your&nbsp;users&nbsp;do.
+        </div>
+        <div class="lead" style="color:var(--fg-on-hero-muted); font-size:28px;">
+          Observability in Go, from an incident you&rsquo;ll&nbsp;recognise.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== 02 SECTION — THE PROBLEM ========== -->
+  <section class="slide slide--hero slide--section" data-label="02 Act 01 · The problem">
+    <div class="hero-bg"></div><div class="wedge-yellow"></div><div class="wedge-coral"></div>
+    <div class="slide-kicker">Act 01 &middot; 0:00 – 8:00</div>
+    <div style="position:absolute; inset:0; display:flex; align-items:center; padding:0 160px; z-index:2;">
+      <div>
+        <div class="chapter-num">Act one</div>
+        <div class="section-title">The&nbsp;problem.</div>
+        <div class="section-sub">when the system says fine&hellip;</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== 03 THE MESSAGE (Marcus / #support) ========== -->
+  <section class="slide slide--content" data-label="03 The Tuesday message"
+    style="display:flex; align-items:center; justify-content:center; padding:100px 160px; background:var(--ink-100);">
+    <div class="slide-kicker" style="color:var(--fg-muted);"></div>
+    <div class="email-card" style="max-width:1300px;">
+      <div class="field"><div class="k">Channel</div><div class="v">#support &middot; Tuesday 9:47 AM</div></div>
+      <div class="field"><div class="k">From</div><div class="v">Marcus &middot; @encroach-team</div></div>
+      <div class="divider"></div>
+      <div class="body">
+        <p>I ran 8 miles this morning and claimed 14 blocks.</p>
+        <p>My map shows <b style="color:#fff;">zero new territory</b>.</p>
+        <p>My friend ran the same route last week and her tiles are all there. Sometimes new tiles appear, sometimes they don&rsquo;t.</p>
+        <p>I have a streak going and this is killing me.</p>
+        <div class="sig">— Marcus</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== 04 ENCROACH APP TOUR ========== -->
+  <section class="slide slide--content" data-label="04 Encroach app tour"
+    style="display:flex; flex-direction:column; padding:80px 120px; gap:36px; overflow:hidden;">
+    <div class="slide-kicker"></div>
+    <div>
+      <div class="eyebrow">The app</div>
+      <div class="rule"></div>
+      <div class="title-lg" style="max-width:1500px;">
+        Encroach - run your city, <em style="font-style:normal; color:var(--teal-500);">claim the grid.</em>
+      </div>
+    </div>
+    <div class="map-mock" style="height:640px;">
+      <div class="app-bar">
+        <div class="brand">ENCROACH</div>
+        <div class="sub">Claim your city, one run at a time.</div>
+      </div>
+      <div class="canvas">
+        <div class="map">
+          <div class="tiles">
+            <div class="tile me"  style="left:10%; top:12%; width:48px; height:48px;"></div>
+            <div class="tile me"  style="left:15%; top:12%; width:48px; height:48px;"></div>
+            <div class="tile me"  style="left:15%; top:18%; width:48px; height:48px;"></div>
+            <div class="tile me"  style="left:20%; top:18%; width:48px; height:48px;"></div>
+            <div class="tile me"  style="left:20%; top:24%; width:48px; height:48px;"></div>
+            <div class="tile me"  style="left:25%; top:24%; width:48px; height:48px;"></div>
+            <div class="tile"     style="left:30%; top:30%; width:48px; height:48px;"></div>
+            <div class="tile"     style="left:35%; top:36%; width:48px; height:48px;"></div>
+            <div class="tile"     style="left:40%; top:42%; width:48px; height:48px;"></div>
+            <div class="tile"     style="left:45%; top:48%; width:48px; height:48px;"></div>
+            <div class="tile"     style="left:50%; top:54%; width:48px; height:48px;"></div>
+            <div class="tile"     style="left:55%; top:60%; width:48px; height:48px;"></div>
+            <div class="tile"     style="left:62%; top:48%; width:48px; height:48px;"></div>
+            <div class="tile"     style="left:68%; top:36%; width:48px; height:48px;"></div>
+            <div class="tile"     style="left:75%; top:24%; width:48px; height:48px;"></div>
+          </div>
+        </div>
+        <div class="side">
+          <h4>Today</h4>
+          <div class="row"><span>Marcus</span><span class="n">42</span></div>
+          <div class="row"><span>Priya</span><span class="n">38</span></div>
+          <div class="row"><span>Demo</span><span class="n">12</span></div>
+          <div class="cta">Submit run</div>
+        </div>
+      </div>
+      <div class="bar">
+        <span>42 / 400 claimed &middot; 18 yours</span>
+        <span>Updated 10:14:23</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== 05 APP STACK (one sentence) ========== -->
+  <section class="slide slide--content" data-label="05 The stack"
+    style="display:flex; align-items:center; padding:0 220px;">
+    <div class="slide-kicker"></div>
+    <div>
+      <div class="eyebrow" style="margin-bottom:24px;">Nothing exotic</div>
+      <div class="rule"></div>
+      <div class="punchy" style="max-width:1600px;">
+        <span style="font-family:var(--font-mono); color:var(--blue-700); background:var(--blue-100); padding:4px 16px; border-radius:10px; font-size:88px;">chi</span> &middot;
+        <span style="font-family:var(--font-mono); color:var(--blue-700); background:var(--blue-100); padding:4px 16px; border-radius:10px; font-size:88px;">Postgres</span> &middot;
+        <span style="font-family:var(--font-mono); color:var(--blue-700); background:var(--blue-100); padding:4px 16px; border-radius:10px; font-size:88px;">Redis</span>
+        <br>
+        goroutine workers.
+      </div>
+      <div class="lead" style="margin-top:48px; max-width:1400px;">
+        GPS data in, grid-cell math, ownership out. Marcus says his tiles are missing. Let&rsquo;s see what&rsquo;s going on.
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ========== D1 DEMO — BROKEN ========== -->
+  <section class="slide slide--content demo-slide" data-label="D1 Demo · broken" style="position:relative; overflow:hidden; background:#0B1220; color:#E6EEFB;">
+    <div style="position:absolute; inset:0; background-image: linear-gradient(rgba(75,195,216,0.09) 1px, transparent 1px), linear-gradient(90deg, rgba(75,195,216,0.09) 1px, transparent 1px); background-size: 80px 80px; background-position: -1px -1px; pointer-events:none;"></div>
+    <div style="position:absolute; top:0; left:0; width:520px; height:520px; background: radial-gradient(circle at 0 0, rgba(255,208,57,0.14), transparent 65%); pointer-events:none;"></div>
+    <div style="position:absolute; bottom:0; right:0; width:640px; height:640px; background: radial-gradient(circle at 100% 100%, rgba(239,121,132,0.12), transparent 65%); pointer-events:none;"></div>
+    <div style="position:absolute; left:120px; top:120px; font-family:var(--font-mono); color:#4BC3D8; font-size:26px; letter-spacing:0.14em; text-transform:uppercase; opacity:0.85; pointer-events:none;">&#9679; REC &middot; live</div>
+    <div class="slide-kicker">Live demo</div>
+    <div style="position:absolute; inset:0; display:flex; flex-direction:column; justify-content:center; padding:0 160px; z-index:2; gap:56px;">
+      <div>
+        <div style="font-family:var(--font-mono); font-size:28px; letter-spacing:0.18em; text-transform:uppercase; color:var(--teal-400); margin-bottom:24px;">bin/demo &middot; mode: <span style="color:var(--yellow-400);">broken</span></div>
+        <div style="font-size:168px; font-weight:800; letter-spacing:-0.03em; line-height:0.95; color:#fff;">Demo time.</div>
+      </div>
+      <div style="display:flex; gap:16px; flex-wrap:wrap;">
+        <span class="pill" style="font-size:24px; padding:10px 22px;">bin/demo --mode=broken</span>
+        <span class="pill" style="font-size:24px; padding:10px 22px;">POST /api/runs</span>
+        <span class="pill" style="font-size:24px; padding:10px 22px;">refresh, refresh, refresh</span>
+      </div>
+      <div style="display:flex; align-items:center; gap:20px; color:var(--fg-on-hero-muted); font-family:var(--font-mono); font-size:22px;">
+        <span style="color:var(--teal-400);">▸</span>
+        <span>next: <em style="font-style:normal; color:#fff;">the wall of logs, which says nothing</em></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== 06 WALL OF LOGS ========== -->
+  <section class="slide slide--content" data-label="06 The wall of logs"
+    style="display:block; padding:80px 120px;">
+    <div class="slide-kicker"></div>
+    <div style="display:flex; flex-direction:column; gap:32px; height:100%;">
+      <div style="display:flex; align-items:baseline; gap:32px;">
+        <div class="eyebrow">Step one of the old playbook</div>
+        <div style="height:1px; flex:1; background:var(--rule);"></div>
+        <div class="lead" style="font-size:22px;">everything is <span style="color:var(--teal-500); font-weight:700;">200 OK</span></div>
+      </div>
+      <div class="terminal" style="flex:1;">
+        <div class="terminal-bar">
+          <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+          <span class="name">~/encroach — tail</span>
+        </div>
+<div class="terminal-body" style="font-size:22px;"><span class="prompt">$</span> go run ./cmd/server 2&gt;&amp;1 | tail -f
+2026/01/14 09:41:23 INFO  run submitted     run_id=847 runner_id=1
+2026/01/14 09:41:23 INFO  tiles claimed     runner_id=1 claimed=14
+2026/01/14 09:41:24 INFO  run processed     run_id=847 tiles=14
+2026/01/14 09:41:52 INFO  tile cache hit cache_age_hours=47.3
+2026/01/14 09:42:17 INFO  run submitted     run_id=848 runner_id=2
+2026/01/14 09:42:17 INFO  tiles claimed     runner_id=2 claimed=11
+2026/01/14 09:42:18 INFO  run processed     run_id=848 tiles=11
+<span class="c-comment"># ... scrolling ...</span>
+
+<span class="prompt">$</span> go run ./cmd/server 2&gt;&amp;1 | grep -i "error|fail|panic"
+<span class="cursor"></span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== 08 THE VOID ========== -->
+  <section class="slide slide--content" data-label="08 The void"
+    style="display:flex; align-items:center; padding:0 220px;">
+    <div class="slide-kicker"></div>
+    <div style="max-width:1480px;">
+      <div class="contrast-lines">
+        <div class="line a">The system says everything is fine.</div>
+        <div class="line b">The runner says it&rsquo;s broken.</div>
+      </div>
+      <div style="display:flex; gap:16px; margin-top:56px; flex-wrap:wrap;">
+        <span class="chip green">✓ zero errors</span>
+        <span class="chip green">✓ zero failed jobs</span>
+        <span class="chip red">runner count: ???</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== 09 WHAT I KNOW / DON'T KNOW ========== -->
+  <section class="slide slide--content" data-label="09 What I know / don't"
+    style="display:flex; align-items:center; padding:0 160px;">
+    <div class="slide-kicker"></div>
+    <div style="width:100%;">
+      <div class="eyebrow" style="margin-bottom:20px;">The gap</div>
+      <div class="rule"></div>
+      <div class="title-lg" style="margin-bottom:48px; max-width:1200px;">
+        &ldquo;No errors&rdquo; is not the same as <em style="font-style:normal; color:var(--teal-500);">&ldquo;working.&rdquo;</em>
+      </div>
+      <div class="knows">
+        <div>
+          <h3 class="a" style="color:var(--teal-500);">What I know</h3>
+          <ul>
+            <li>Something is wrong</li>
+            <li>No errors in logs</li>
+            <li>All jobs succeeded</li>
+            <li>Sometimes it works</li>
+            <li>I can&rsquo;t reproduce it reliably</li>
+          </ul>
+        </div>
+        <div>
+          <h3 class="b" style="color:var(--coral-500);">What I don&rsquo;t know</h3>
+          <ul>
+            <li>What&rsquo;s actually failing</li>
+            <li>How many runners are affected</li>
+            <li>How long this has been happening</li>
+            <li>Whether my &ldquo;fix&rdquo; fixes anything</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== 10 LET'S FIX THAT (pivot) ========== -->
+  <section class="slide slide--hero" data-label="10 Let's fix that">
+    <div class="hero-bg"></div><div class="wedge-yellow"></div><div class="wedge-coral"></div>
+    <div class="slide-kicker">Pivot</div>
+    <div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; z-index:2; padding:0 200px;">
+      <div style="text-align:center;">
+        <div style="font-family:var(--font-mono); font-size:24px; letter-spacing:0.14em; text-transform:uppercase; color:var(--teal-400); margin-bottom:40px;">Not &ldquo;did the job finish?&rdquo;</div>
+        <div style="font-size:140px; font-weight:800; letter-spacing:-0.03em; line-height:1; color:#fff;">
+          Did the runner<br>
+          <em style="font-style:normal; color:var(--yellow-400);">see their territory?</em>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== 11 SECTION — THE INVESTIGATION ========== -->
+  <section class="slide slide--hero slide--section" data-label="11 Act 02 · The investigation">
+    <div class="hero-bg"></div><div class="wedge-yellow"></div><div class="wedge-coral"></div>
+    <div class="slide-kicker">Act 02 &middot; 8:00 – 26:00</div>
+    <div style="position:absolute; inset:0; display:flex; align-items:center; padding:0 160px; z-index:2;">
+      <div>
+        <div class="chapter-num">Act two</div>
+        <div class="section-title">The&nbsp;<em>investigation</em>.</div>
+        <div class="section-sub">metrics, traces, logs</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== 12 METRICS DEFINITION ========== -->
+  <section class="slide slide--content" data-label="12 What are metrics"
+    style="display:flex; align-items:center; padding:0 220px;">
+    <div class="slide-kicker"></div>
+    <div>
+      <div class="eyebrow" style="margin-bottom:24px; color:var(--accent);">Pillar 01 / 03 &middot; Metrics</div>
+      <div class="rule"></div>
+      <div class="punchy" style="max-width:1500px;">
+        Numbers about your system,<br>
+        <em>over time.</em>
+      </div>
+      <div class="lead" style="margin-top:48px; max-width:1200px;">
+        How many? How fast? How often? Metrics tell you what&rsquo;s normal - so you can spot what&rsquo;s weird.
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ========== P1 PUSH VS PULL ========== -->
+  <section class="slide slide--content" data-label="12a Push vs pull"
+    style="display:flex; flex-direction:column; gap:40px; padding:100px 140px; justify-content:center;">
+    <div class="slide-kicker"></div>
+    <div>
+      <div class="eyebrow">How Prometheus works</div>
+      <div class="rule"></div>
+      <div class="title-lg">Push to DataDog.<br><em style="font-style:normal; color:var(--teal-500);">Pull with Prometheus.</em></div>
+    </div>
+    <div class="cols cols-2">
+      <div class="col" style="border-top:6px solid var(--coral-500);">
+        <div style="font-size:18px; letter-spacing:0.14em; text-transform:uppercase; color:var(--coral-500); font-weight:700; margin-bottom:16px;">Most monitoring &middot; push</div>
+        <ul style="margin:0; padding:0; list-style:none;">
+          <li style="font-size:26px; line-height:1.45; margin-bottom:10px;">Configure endpoints and API keys</li>
+          <li style="font-size:26px; line-height:1.45; margin-bottom:10px;">Your app handles failures and retries</li>
+          <li style="font-size:26px; line-height:1.45;">Network hiccup → lost data</li>
+        </ul>
+      </div>
+      <div class="col" style="border-top:6px solid var(--teal-500);">
+        <div style="font-size:18px; letter-spacing:0.14em; text-transform:uppercase; color:var(--teal-500); font-weight:700; margin-bottom:16px;">Prometheus &middot; pull</div>
+        <ul style="margin:0; padding:0; list-style:none;">
+          <li style="font-size:26px; line-height:1.45; margin-bottom:10px;">Just expose a <code style="font-family:var(--font-mono); color:var(--blue-700);">/metrics</code> route</li>
+          <li style="font-size:26px; line-height:1.45; margin-bottom:10px;">No credentials, no external config</li>
+          <li style="font-size:26px; line-height:1.45;">Prometheus handles scraping &amp; retries</li>
+        </ul>
+      </div>
+    </div>
+    <div class="lead" style="font-size:26px;">Your app doesn’t know Prometheus exists. It just exposes counters and moves on.</div>
+  </section>
+
+  <!-- ========== P2 /metrics endpoint + config ========== -->
+  <section class="slide slide--content" data-label="12b /metrics endpoint"
+    style="display:block; padding:80px 120px;">
+    <div class="slide-kicker"></div>
+    <div style="display:flex; flex-direction:column; gap:32px; height:100%;">
+      <div style="display:flex; align-items:baseline; gap:32px;">
+        <div class="eyebrow">In practice</div>
+        <div style="height:1px; flex:1; background:var(--rule);"></div>
+        <div class="lead" style="font-size:22px;">what Prometheus actually sees</div>
+      </div>
+      <div style="display:grid; grid-template-columns:1.05fr 0.95fr; gap:40px; flex:1;">
+        <div class="code" style="font-size:24px; padding:36px 44px;"><span class="c-comment">// GET /metrics</span>
+<span class="c-comment"># HELP tile_cache_hits_total</span>
+<span class="c-comment"># TYPE tile_cache_hits_total counter</span>
+tile_cache_hits_total <span class="c-num">1247</span>
+
+<span class="c-comment"># HELP tile_cache_misses_total</span>
+<span class="c-comment"># TYPE tile_cache_misses_total counter</span>
+tile_cache_misses_total <span class="c-num">89</span>
+
+tile_cache_age_hours <span class="c-num">47.3</span></div>
+        <div class="code" style="font-size:24px; padding:36px 44px; background:#0B1220;"><span class="c-comment"># prometheus.yml</span>
+<span class="c-key">scrape_configs</span>:
+  - <span class="c-key">job_name</span>: <span class="c-str">'encroach'</span>
+    <span class="c-key">scrape_interval</span>: <span class="c-num">15s</span>
+    <span class="c-key">static_configs</span>:
+      - <span class="c-key">targets</span>:
+          - <span class="c-str">'localhost:3000'</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== P3 logs vs prometheus ========== -->
+  <section class="slide slide--content" data-label="12c Logs vs Prometheus"
+    style="display:flex; flex-direction:column; gap:40px; padding:100px 140px; justify-content:center;">
+    <div class="slide-kicker"></div>
+    <div>
+      <div class="eyebrow">The core difference</div>
+      <div class="rule"></div>
+      <div class="title-lg">Aggregate at <em style="font-style:normal; color:var(--teal-500);">write time</em>, not read time.</div>
+    </div>
+    <div class="cols cols-2">
+      <div class="col" style="border-top:6px solid var(--accent);">
+        <div style="font-size:18px; letter-spacing:0.14em; text-transform:uppercase; color:var(--accent); font-weight:700; margin-bottom:16px;">Logs</div>
+        <p style="font-size:28px; line-height:1.4; margin:0;">Store every individual event.<br>Query later.</p>
+        <p style="margin-top:20px; font-size:24px; color:var(--fg-muted);">&ldquo;What happened at 3:47 AM?&rdquo;</p>
+      </div>
+      <div class="col" style="border-top:6px solid var(--teal-500);">
+        <div style="font-size:18px; letter-spacing:0.14em; text-transform:uppercase; color:var(--teal-500); font-weight:700; margin-bottom:16px;">Prometheus</div>
+        <p style="font-size:28px; line-height:1.4; margin:0;">Store aggregates.<br>Query summaries.</p>
+        <p style="margin-top:20px; font-size:24px; color:var(--fg-muted);">&ldquo;What’s the average over the last hour?&rdquo;</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== P4 what you can't do ========== -->
+  <section class="slide slide--content" data-label="12d What you can’t do"
+    style="display:flex; align-items:center; padding:0 160px;">
+    <div class="slide-kicker"></div>
+    <div style="width:100%;">
+      <div class="eyebrow" style="color:var(--coral-500);">What Prometheus <em style="font-style:normal;">can’t</em> answer</div>
+      <div class="rule"></div>
+      <div class="title-lg" style="margin-bottom:40px;">If you didn’t instrument it upfront, <em style="font-style:normal; color:var(--coral-500);">the data doesn’t exist.</em></div>
+      <ul style="list-style:none; margin:0; padding:0; max-width:1500px; display:flex; flex-direction:column; gap:16px;">
+        <li style="font-size:30px; display:grid; grid-template-columns:40px 1fr; gap:16px; align-items:baseline;"><span style="color:var(--coral-500); font-weight:800;">✕</span><span>&ldquo;Show me all requests over 1 second.&rdquo; - <span style="color:var(--fg-muted);">no individual data stored</span></span></li>
+        <li style="font-size:30px; display:grid; grid-template-columns:40px 1fr; gap:16px; align-items:baseline;"><span style="color:var(--coral-500); font-weight:800;">✕</span><span>&ldquo;What’s the average for runner 847?&rdquo; - <span style="color:var(--fg-muted);">already aggregated across all runners</span></span></li>
+        <li style="font-size:30px; display:grid; grid-template-columns:40px 1fr; gap:16px; align-items:baseline;"><span style="color:var(--coral-500); font-weight:800;">✕</span><span>&ldquo;What was the slowest request yesterday?&rdquo; - <span style="color:var(--fg-muted);">individual values not stored</span></span></li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ========== P5 what you CAN track ========== -->
+  <section class="slide slide--content" data-label="12e Counters · Gauges · Histograms"
+    style="display:flex; flex-direction:column; gap:32px; padding:80px 120px;">
+    <div class="slide-kicker"></div>
+    <div>
+      <div class="eyebrow">What you can track</div>
+      <div class="rule"></div>
+      <div class="title-lg">Three shapes of number.</div>
+    </div>
+    <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:32px; flex:1;">
+      <div style="background:var(--paper); border:1px solid var(--rule); border-top:6px solid var(--teal-500); border-radius:var(--r-lg); padding:32px 36px; box-shadow:var(--shadow-md); display:flex; flex-direction:column; gap:18px;">
+        <div style="font-family:var(--font-mono); font-size:18px; letter-spacing:0.14em; text-transform:uppercase; color:var(--teal-500); font-weight:700;">Counter</div>
+        <div style="font-size:30px; font-weight:700; color:var(--ink-900);">only goes up</div>
+        <div class="code" style="font-size:20px; padding:20px 24px; margin:0;">tile_cache_hits_total <span class="c-num">1,247</span></div>
+        <div style="font-size:22px; color:var(--fg-muted); margin-top:auto;">requests, errors, hits</div>
+      </div>
+      <div style="background:var(--paper); border:1px solid var(--rule); border-top:6px solid var(--accent); border-radius:var(--r-lg); padding:32px 36px; box-shadow:var(--shadow-md); display:flex; flex-direction:column; gap:18px;">
+        <div style="font-family:var(--font-mono); font-size:18px; letter-spacing:0.14em; text-transform:uppercase; color:var(--accent); font-weight:700;">Gauge</div>
+        <div style="font-size:30px; font-weight:700; color:var(--ink-900);">up and down</div>
+        <div class="code" style="font-size:20px; padding:20px 24px; margin:0;">tile_cache_age_hours <span class="c-num">47.2</span></div>
+        <div style="font-size:22px; color:var(--fg-muted); margin-top:auto;">cache age, queue depth</div>
+      </div>
+      <div style="background:var(--paper); border:1px solid var(--rule); border-top:6px solid var(--coral-500); border-radius:var(--r-lg); padding:32px 36px; box-shadow:var(--shadow-md); display:flex; flex-direction:column; gap:18px;">
+        <div style="font-family:var(--font-mono); font-size:18px; letter-spacing:0.14em; text-transform:uppercase; color:var(--coral-500); font-weight:700;">Histogram</div>
+        <div style="font-size:30px; font-weight:700; color:var(--ink-900);">distributions</div>
+        <div class="code" style="font-size:18px; padding:20px 24px; margin:0; overflow-wrap:anywhere; line-height:1.55;">http_request_duration_<br>seconds_bucket{le=<span class="c-str">"0.1"</span>} <span class="c-num">892</span></div>
+        <div style="font-size:22px; color:var(--fg-muted); margin-top:auto;">p50, p95, p99 latency</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== P6 the tradeoff ========== -->
+  <section class="slide slide--content" data-label="12f The tradeoff"
+    style="display:flex; flex-direction:column; gap:40px; padding:100px 140px; justify-content:center;">
+    <div class="slide-kicker"></div>
+    <div>
+      <div class="eyebrow">The tradeoff</div>
+      <div class="rule"></div>
+      <div class="title-lg">Fast forever, <em style="font-style:normal; color:var(--coral-500);">if you planned ahead.</em></div>
+    </div>
+    <div class="cols cols-2">
+      <div class="col" style="border-top:6px solid var(--teal-500);">
+        <div style="font-size:18px; letter-spacing:0.14em; text-transform:uppercase; color:var(--teal-500); font-weight:700; margin-bottom:16px;">Upside</div>
+        <ul style="margin:0; padding:0; list-style:none;">
+          <li style="font-size:26px; line-height:1.45; margin-bottom:10px;">Scales to billions of data points</li>
+          <li style="font-size:26px; line-height:1.45; margin-bottom:10px;">Constant memory usage</li>
+          <li style="font-size:26px; line-height:1.45;">Fast queries, always</li>
+        </ul>
+      </div>
+      <div class="col" style="border-top:6px solid var(--coral-500);">
+        <div style="font-size:18px; letter-spacing:0.14em; text-transform:uppercase; color:var(--coral-500); font-weight:700; margin-bottom:16px;">Downside</div>
+        <ul style="margin:0; padding:0; list-style:none;">
+          <li style="font-size:26px; line-height:1.45; margin-bottom:10px;">Must plan ahead</li>
+          <li style="font-size:26px; line-height:1.45; margin-bottom:10px;">Can’t ask new questions about old data</li>
+          <li style="font-size:26px; line-height:1.45;">Less flexible than logs</li>
+        </ul>
+      </div>
+    </div>
+    <div class="lead" style="font-size:26px;">For our cache problem - hits, misses, age. <em style="font-style:normal; color:var(--teal-500);">Perfect for Prometheus.</em></div>
+  </section>
+
+  <!-- ========== 13a go.mod ========== -->
+  <section class="slide slide--content" data-label="13a Prometheus · go.mod"
+    style="display:block; padding:80px 120px;">
+    <div class="slide-kicker"></div>
+    <div style="display:flex; flex-direction:column; gap:32px; height:100%;">
+      <div style="display:flex; align-items:baseline; gap:32px;">
+        <div class="eyebrow">Adding Prometheus &middot; go.mod</div>
+        <div style="height:1px; flex:1; background:var(--rule);"></div>
+        <div class="lead" style="font-size:22px;">official Go client &middot; we already use chi</div>
+      </div>
+      <div class="code" style="font-size:34px; padding:56px 64px; flex:1;"><span class="c-comment">// go.mod</span>
+<span class="c-key">require</span> (
+    github.com/prometheus/client_golang <span class="c-num">v1.20.0</span>
+    github.com/go-chi/chi/v5            <span class="c-num">v5.2.1</span>
+)</div>
+    </div>
+  </section>
+
+  <!-- ========== 13b metrics.go ========== -->
+  <section class="slide slide--content" data-label="13b Prometheus · metrics.go"
+    style="display:block; padding:80px 120px;">
+    <div class="slide-kicker"></div>
+    <div style="display:flex; flex-direction:column; gap:32px; height:100%;">
+      <div style="display:flex; align-items:baseline; gap:32px;">
+        <div class="eyebrow">Package vars &middot; promauto registers for you</div>
+        <div style="height:1px; flex:1; background:var(--rule);"></div>
+        <div class="lead" style="font-size:22px;">counters, one gauge</div>
+      </div>
+      <div class="code" style="font-size:26px; padding:40px 52px; flex:1;"><span class="c-comment">// internal/obs/metrics.go</span>
+<span class="c-key">var</span> (
+    TileCacheHits = promauto.<span class="c-fn">NewCounter</span>(prometheus.CounterOpts{
+        Name: <span class="c-str">"tile_cache_hits_total"</span>,
+    })
+    TileCacheMisses = promauto.<span class="c-fn">NewCounter</span>(prometheus.CounterOpts{
+        Name: <span class="c-str">"tile_cache_misses_total"</span>,
+    })
+    TileCacheAgeHours = promauto.<span class="c-fn">NewGauge</span>(prometheus.GaugeOpts{
+        Name: <span class="c-str">"tile_cache_age_hours"</span>,
+    })
+)</div>
+    </div>
+  </section>
+
+  <!-- ========== 13c service + main ========== -->
+  <section class="slide slide--content" data-label="13c Prometheus · wiring"
+    style="display:block; padding:80px 120px;">
+    <div class="slide-kicker"></div>
+    <div style="display:flex; flex-direction:column; gap:32px; height:100%;">
+      <div style="display:flex; align-items:baseline; gap:32px;">
+        <div class="eyebrow">In the service &middot; one middleware, one route</div>
+        <div style="height:1px; flex:1; background:var(--rule);"></div>
+        <div class="lead" style="font-size:22px;">≈20 lines of code, total</div>
+      </div>
+      <div class="code" style="font-size:26px; padding:40px 52px; flex:1;"><span class="c-comment">// internal/tiles/service.go</span>
+<span class="c-key">func</span> (s *Service) <span class="c-fn">GetTerritory</span>(ctx context.Context) ([]Tile, <span class="c-type">error</span>) {
+    cached, err := s.<span class="c-fn">getFromCache</span>(ctx)
+    <span class="c-key">if</span> err == <span class="c-key">nil</span> &amp;&amp; cached != <span class="c-key">nil</span> {
+        obs.TileCacheHits.<span class="c-fn">Inc</span>()
+        obs.TileCacheAgeHours.<span class="c-fn">Set</span>(time.<span class="c-fn">Since</span>(cached.CachedAt).<span class="c-fn">Hours</span>())
+        <span class="c-comment">// ...</span>
+    } <span class="c-key">else</span> {
+        obs.TileCacheMisses.<span class="c-fn">Inc</span>()
+    }
+}
+
+<span class="c-comment">// cmd/server/main.go</span>
+r.<span class="c-fn">Use</span>(obs.PrometheusMiddleware)
+r.<span class="c-fn">Handle</span>(<span class="c-str">"/metrics"</span>, promhttp.<span class="c-fn">Handler</span>())</div>
+    </div>
+  </section>
+
+
+  <!-- ========== D2 DEMO — METRICS ========== -->
+  <section class="slide slide--content demo-slide" data-label="D2 Demo · metrics" style="position:relative; overflow:hidden; background:#0B1220; color:#E6EEFB;">
+    <div style="position:absolute; inset:0; background-image: linear-gradient(rgba(75,195,216,0.09) 1px, transparent 1px), linear-gradient(90deg, rgba(75,195,216,0.09) 1px, transparent 1px); background-size: 80px 80px; background-position: -1px -1px; pointer-events:none;"></div>
+    <div style="position:absolute; top:0; left:0; width:520px; height:520px; background: radial-gradient(circle at 0 0, rgba(255,208,57,0.14), transparent 65%); pointer-events:none;"></div>
+    <div style="position:absolute; bottom:0; right:0; width:640px; height:640px; background: radial-gradient(circle at 100% 100%, rgba(239,121,132,0.12), transparent 65%); pointer-events:none;"></div>
+    <div style="position:absolute; left:120px; top:120px; font-family:var(--font-mono); color:#4BC3D8; font-size:26px; letter-spacing:0.14em; text-transform:uppercase; opacity:0.85; pointer-events:none;">&#9679; REC &middot; live</div>
+    <div class="slide-kicker">Live demo</div>
+    <div style="position:absolute; inset:0; display:flex; flex-direction:column; justify-content:center; padding:0 160px; z-index:2; gap:56px;">
+      <div>
+        <div style="font-family:var(--font-mono); font-size:28px; letter-spacing:0.18em; text-transform:uppercase; color:var(--teal-400); margin-bottom:24px;">bin/demo &middot; mode: <span style="color:var(--yellow-400);">metrics</span></div>
+        <div style="font-size:168px; font-weight:800; letter-spacing:-0.03em; line-height:0.95; color:#fff; margin-bottom:24px;">Demo time.</div>
+        <div style="font-size:44px; color:var(--fg-on-hero-muted); font-weight:500; max-width:1500px;">Same demo app, now instrumented. /metrics endpoint live, Prometheus scraping, Grafana dashboard ready.</div>
+      </div>
+      <div style="display:flex; gap:16px; flex-wrap:wrap;">
+        <span class="pill" style="font-size:24px; padding:10px 22px;">curl :3000/metrics</span>
+        <span class="pill" style="font-size:24px; padding:10px 22px;">prometheus scrape</span>
+        <span class="pill" style="font-size:24px; padding:10px 22px;">grafana → RED + cache hit rate</span>
+      </div>
+      <div style="display:flex; align-items:center; gap:20px; color:var(--fg-on-hero-muted); font-family:var(--font-mono); font-size:22px;">
+        <span style="color:var(--teal-400);">▸</span>
+        <span>next: <em style="font-style:normal; color:#fff;">what the dashboard shows</em></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== 14 GRAFANA RED METRICS ========== -->
+  <section class="slide slide--content" data-label="14 Grafana RED"
+    style="display:flex; flex-direction:column; gap:40px; padding:80px 120px;">
+    <div class="slide-kicker"></div>
+    <div>
+      <div class="eyebrow">Grafana &middot; Encroach production</div>
+      <div class="rule"></div>
+      <div class="title-lg">RED looks fine. <span style="color:var(--fg-muted); font-weight:500;">It always does.</span></div>
+    </div>
+    <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:32px; flex:1;">
+      <div style="background:var(--paper); border:1px solid var(--rule); border-radius:var(--r-lg); padding:32px; box-shadow:var(--shadow-md);">
+        <div style="font-size:18px; letter-spacing:0.12em; text-transform:uppercase; color:var(--fg-muted); font-weight:700;">Request rate</div>
+        <div style="font-size:84px; font-weight:800; color:var(--ink-900); line-height:1; margin-top:16px; font-variant-numeric:tabular-nums;">42<span style="font-size:28px; color:var(--fg-muted); font-weight:600;">/s</span></div>
+        <div style="font-family:var(--font-mono); color:var(--teal-500); margin-top:16px; font-size:22px;">▁▂▃▂▁▂▃▂▁▂▃▂▁▂</div>
+      </div>
+      <div style="background:var(--paper); border:1px solid var(--rule); border-radius:var(--r-lg); padding:32px; box-shadow:var(--shadow-md);">
+        <div style="font-size:18px; letter-spacing:0.12em; text-transform:uppercase; color:var(--fg-muted); font-weight:700;">Error rate</div>
+        <div style="font-size:84px; font-weight:800; color:var(--teal-500); line-height:1; margin-top:16px; font-variant-numeric:tabular-nums;">0.0<span style="font-size:28px; color:var(--fg-muted); font-weight:600;">%</span></div>
+        <div style="font-family:var(--font-mono); color:var(--teal-500); margin-top:16px; font-size:22px;">▁▁▁▁▁▁▁▁▁▁▁▁▁▁</div>
+      </div>
+      <div style="background:var(--paper); border:1px solid var(--rule); border-radius:var(--r-lg); padding:32px; box-shadow:var(--shadow-md);">
+        <div style="font-size:18px; letter-spacing:0.12em; text-transform:uppercase; color:var(--fg-muted); font-weight:700;">p99 latency</div>
+        <div style="font-size:84px; font-weight:800; color:var(--ink-900); line-height:1; margin-top:16px; font-variant-numeric:tabular-nums;">127<span style="font-size:28px; color:var(--fg-muted); font-weight:600;">ms</span></div>
+        <div style="font-family:var(--font-mono); color:var(--teal-500); margin-top:16px; font-size:22px;">▂▂▃▂▂▂▂▃▂▂▂▂▃▂</div>
+      </div>
+      <div style="background:var(--paper); border:1px solid var(--rule); border-radius:var(--r-lg); padding:32px; box-shadow:var(--shadow-md);">
+        <div style="font-size:18px; letter-spacing:0.12em; text-transform:uppercase; color:var(--fg-muted); font-weight:700;">Runs / min</div>
+        <div style="font-size:84px; font-weight:800; color:var(--ink-900); line-height:1; margin-top:16px; font-variant-numeric:tabular-nums;">18</div>
+        <div style="font-family:var(--font-mono); color:var(--teal-500); margin-top:16px; font-size:22px;">▂▂▂▂▂▂▂▂▂▂▂▂▂▂</div>
+      </div>
+    </div>
+    <div class="lead" style="font-size:26px;">Marcus&rsquo;s message is sitting in support. Let&rsquo;s dig deeper.</div>
+  </section>
+
+  <!-- ========== 15 THE REVEAL — 100% for 18 hours ========== -->
+  <section class="slide slide--content" data-label="15 Cache hit 100%"
+    style="padding:80px 120px; display:flex; flex-direction:column; justify-content:center; gap:40px;">
+    <div class="slide-kicker"></div>
+    <div>
+      <div class="eyebrow" style="margin-bottom:16px; color:var(--coral-500);">The first aha</div>
+      <div class="title-lg" style="max-width:1600px;">
+        Tile cache hit rate: <span style="color:var(--coral-500);">100% for 18 hours.</span>
+      </div>
+    </div>
+    <div class="dash-card">
+      <div class="head">
+        <div class="title">tile_cache_hit_rate (24h)</div>
+        <div class="meta">Prometheus &middot; Grafana</div>
+      </div>
+      <div class="chart">
+        <div class="y-axis"><span>100%</span><span>75%</span><span>50%</span><span>25%</span><span>0%</span></div>
+        <div class="plot">
+          <div class="grid-line" style="top:0;"></div>
+          <div class="grid-line" style="top:25%;"></div>
+          <div class="grid-line" style="top:50%;"></div>
+          <div class="grid-line" style="top:75%;"></div>
+          <div class="grid-line" style="top:100%;"></div>
+          <div class="line" style="top:4px; left:0; right:0;"></div>
+          <div class="annotation" style="top:24px; right:40px;">↑ pinned at 100% since Monday 15:00</div>
+        </div>
+        <div class="x-axis"><span>Mon 00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>Tue 00:00</span><span>06:00</span><span>now</span></div>
+      </div>
+    </div>
+    <div class="lead" style="max-width:1600px; font-size:26px;">
+      Cache hit rate: 100%. For 18 hours. A healthy cache has misses. This one <em>never expires</em>.
+    </div>
+  </section>
+
+  <!-- ========== 16 FIRST AHA SUMMARY ========== -->
+  <section class="slide slide--content" data-label="16 First aha"
+    style="display:flex; align-items:center; padding:0 160px;">
+    <div class="slide-kicker"></div>
+    <div style="width:100%;">
+      <div class="eyebrow" style="margin-bottom:20px;">After metrics</div>
+      <div class="rule"></div>
+      <div class="title-lg" style="margin-bottom:48px;">Metrics told me <em style="font-style:normal; color:var(--teal-500);">what.</em> Not <em style="font-style:normal; color:var(--coral-500);">where.</em></div>
+      <div class="knows">
+        <div>
+          <h3 style="color:var(--teal-500);">Now I know</h3>
+          <ul>
+            <li>Cache is always &ldquo;valid&rdquo;</li>
+            <li>We&rsquo;re never fetching fresh tiles</li>
+            <li>&ldquo;Sometimes it works&rdquo; - stale data, brief refresh windows</li>
+          </ul>
+        </div>
+        <div>
+          <h3 style="color:var(--coral-500);">Still don&rsquo;t know</h3>
+          <ul>
+            <li>Why is the cache always valid?</li>
+            <li>What&rsquo;s the validation logic actually doing?</li>
+            <li>Where in the request path does it decide?</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ========== 16.5 WOULD I PAGE MYSELF ========== -->
+  <section class="slide slide--content" data-label="16b Would I page myself"
+    style="display:flex; align-items:center; justify-content:center; padding:0 220px; background:var(--ink-100);">
+    <div class="slide-kicker" style="color:var(--fg-muted);">Quick aside &middot; alerting</div>
+    <div style="text-align:center; max-width:1600px;">
+      <div class="eyebrow" style="color:var(--accent); margin-bottom:24px;">Now that I have this metric&hellip;</div>
+      <div class="rule" style="margin:0 auto 40px; width:160px;"></div>
+      <div class="title-xl" style="font-size:100px; max-width:1500px; margin:0 auto;">
+        Would I <em style="font-style:normal; color:var(--coral-500);">page myself</em> for this?
+      </div>
+      <div class="code" style="display:inline-block; margin-top:56px; padding:32px 48px; text-align:left; font-size:30px;"><span class="c-key">tile_cache_hit_rate</span> &gt; <span class="c-num">0.99</span> <span class="c-key">for</span> &gt; <span class="c-num">1h</span></div>
+      <div style="margin-top:48px;">
+        <span class="chip green" style="font-size:44px; padding:16px 40px; font-weight:800;">Yes.</span>
+      </div>
+      <div class="lead" style="margin-top:40px; font-size:28px; color:var(--ink-900);">
+        A healthy cache has misses. No misses means nothing is refreshing.<br>
+        PromQL is the same in any language - once you learn it, it works everywhere.
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== 17 TRACES DEFINITION ========== -->
+  <section class="slide slide--content" data-label="17 What are traces"
+    style="display:flex; align-items:center; padding:0 220px;">
+    <div class="slide-kicker"></div>
+    <div>
+      <div class="eyebrow" style="margin-bottom:24px; color:var(--accent);">Pillar 02 / 03 &middot; Traces</div>
+      <div class="rule"></div>
+      <div class="punchy" style="max-width:1600px;">
+        One request.<br>
+        <em>The whole&nbsp;journey.</em>
+      </div>
+      <div class="lead" style="margin-top:48px; max-width:1300px;">
+        Metrics: &ldquo;what&rsquo;s happening on average.&rdquo; Traces: &ldquo;what happened to <em>this</em> request, in order, with timing.&rdquo;
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== 18 OTEL CODE ========== -->
+  <section class="slide slide--content" data-label="18 OpenTelemetry code"
+    style="display:block; padding:80px 120px;">
+    <div class="slide-kicker"></div>
+    <div style="display:flex; flex-direction:column; gap:32px; height:100%;">
+      <div style="display:flex; align-items:baseline; gap:32px;">
+        <div class="eyebrow">OpenTelemetry + otelhttp</div>
+        <div style="height:1px; flex:1; background:var(--rule);"></div>
+        <div class="lead" style="font-size:22px;"><code style="font-family:var(--font-mono); color:var(--blue-700);">defer span.End()</code> &middot; you already know how this works</div>
+      </div>
+      <div class="code" style="font-size:26px; padding:40px 52px; flex:1;"><span class="c-comment">// internal/tiles/service.go</span>
+<span class="c-key">var</span> tracer = otel.<span class="c-fn">Tracer</span>(<span class="c-str">"tiles"</span>)
+
+<span class="c-key">func</span> (s *Service) <span class="c-fn">GetTerritory</span>(ctx context.Context) ([]Tile, <span class="c-type">error</span>) {
+    ctx, span := tracer.<span class="c-fn">Start</span>(ctx, <span class="c-str">"tiles.GetTerritory"</span>)
+    <span class="c-key">defer</span> span.<span class="c-fn">End</span>()
+
+    span.<span class="c-fn">SetAttributes</span>(
+        attribute.<span class="c-fn">Bool</span>(<span class="c-str">"cache.hit"</span>, cached != <span class="c-key">nil</span>),
+        attribute.<span class="c-fn">Float64</span>(<span class="c-str">"cache.age_hours"</span>, ageHours),
+    )
+    <span class="c-comment">// ... existing logic ...</span>
+}</div>
+    </div>
+  </section>
+
+
+  <!-- ========== D3 DEMO — TRACES ========== -->
+  <section class="slide slide--content demo-slide" data-label="D3 Demo · traces" style="position:relative; overflow:hidden; background:#0B1220; color:#E6EEFB;">
+    <div style="position:absolute; inset:0; background-image: linear-gradient(rgba(75,195,216,0.09) 1px, transparent 1px), linear-gradient(90deg, rgba(75,195,216,0.09) 1px, transparent 1px); background-size: 80px 80px; background-position: -1px -1px; pointer-events:none;"></div>
+    <div style="position:absolute; top:0; left:0; width:520px; height:520px; background: radial-gradient(circle at 0 0, rgba(255,208,57,0.14), transparent 65%); pointer-events:none;"></div>
+    <div style="position:absolute; bottom:0; right:0; width:640px; height:640px; background: radial-gradient(circle at 100% 100%, rgba(239,121,132,0.12), transparent 65%); pointer-events:none;"></div>
+    <div style="position:absolute; left:120px; top:120px; font-family:var(--font-mono); color:#4BC3D8; font-size:26px; letter-spacing:0.14em; text-transform:uppercase; opacity:0.85; pointer-events:none;">&#9679; REC &middot; live</div>
+    <div class="slide-kicker">Live demo</div>
+    <div style="position:absolute; inset:0; display:flex; flex-direction:column; justify-content:center; padding:0 160px; z-index:2; gap:56px;">
+      <div>
+        <div style="font-family:var(--font-mono); font-size:28px; letter-spacing:0.18em; text-transform:uppercase; color:var(--teal-400); margin-bottom:24px;">bin/demo &middot; mode: <span style="color:var(--yellow-400);">traces</span></div>
+        <div style="font-size:168px; font-weight:800; letter-spacing:-0.03em; line-height:0.95; color:#fff; margin-bottom:24px;">Demo time.</div>
+        <div style="font-size:44px; color:var(--fg-on-hero-muted); font-weight:500; max-width:1500px;">Same demo app, now with OpenTelemetry. We search for tiles.GetTerritory and follow one request.</div>
+      </div>
+      <div style="display:flex; gap:16px; flex-wrap:wrap;">
+        <span class="pill" style="font-size:24px; padding:10px 22px;">OTLP → OpenObserve</span>
+        <span class="pill" style="font-size:24px; padding:10px 22px;">custom attrs: cache.hit, cache.age_hours</span>
+        <span class="pill" style="font-size:24px; padding:10px 22px;">waterfalls for hit and miss</span>
+      </div>
+      <div style="display:flex; align-items:center; gap:20px; color:var(--fg-on-hero-muted); font-family:var(--font-mono); font-size:22px;">
+        <span style="color:var(--teal-400);">▸</span>
+        <span>next: <em style="font-style:normal; color:#fff;">a list of traces, one suspicious duration</em></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== 19 TRACE LIST ========== -->
+  <section class="slide slide--content" data-label="19 OpenObserve — 47 hours"
+    style="display:flex; flex-direction:column; gap:32px; padding:80px 120px;">
+    <div class="slide-kicker"></div>
+    <div>
+      <div class="eyebrow">OpenObserve &middot; tiles.GetTerritory</div>
+      <div class="rule"></div>
+      <div class="title-lg">47 hours. <span style="color:var(--coral-500);">Every single request.</span></div>
+    </div>
+    <div style="background:#0B1220; color:#E6EEFB; border-radius:var(--r-lg); padding:32px 40px; font-family:var(--font-mono); font-size:22px; line-height:1.8; box-shadow:var(--shadow-lg);">
+      <div style="color:#8A93A6; font-size:18px; letter-spacing:0.08em; text-transform:uppercase; margin-bottom:20px; display:grid; grid-template-columns: 280px 160px 120px 1fr; gap:24px;">
+        <span>trace id</span><span>time</span><span>duration</span><span>cache.age_hours</span>
+      </div>
+      <div style="display:grid; grid-template-columns: 280px 160px 120px 1fr; gap:24px; padding:14px 0; border-top:1px solid rgba(255,255,255,0.08); color:#C6D9F5;"><span>abc123…</span><span>14:23:01</span><span style="color:#4BC3D8; font-weight:700;">8ms</span><span style="color:#EF7984; font-weight:700;">47.3</span></div>
+      <div style="display:grid; grid-template-columns: 280px 160px 120px 1fr; gap:24px; padding:14px 0; border-top:1px solid rgba(255,255,255,0.08); color:#C6D9F5;"><span>def456…</span><span>14:18:47</span><span style="color:#4BC3D8; font-weight:700;">12ms</span><span style="color:#EF7984; font-weight:700;">47.1</span></div>
+      <div style="display:grid; grid-template-columns: 280px 160px 120px 1fr; gap:24px; padding:14px 0; border-top:1px solid rgba(255,255,255,0.08); color:#C6D9F5;"><span>ghi789…</span><span>13:45:22</span><span style="color:#4BC3D8; font-weight:700;">9ms</span><span style="color:#EF7984; font-weight:700;">46.8</span></div>
+      <div style="display:grid; grid-template-columns: 280px 160px 120px 1fr; gap:24px; padding:14px 0; border-top:1px solid rgba(255,255,255,0.08); color:#C6D9F5;"><span>jkl012…</span><span>13:42:08</span><span style="color:#4BC3D8; font-weight:700;">4ms</span><span style="color:#EF7984; font-weight:700;">46.6</span></div>
+    </div>
+  </section>
+
+  <!-- ========== 20 TRACE WATERFALL — CACHE HIT ========== -->
+  <section class="slide slide--content" data-label="20 Trace waterfall — no DB span"
+    style="display:flex; flex-direction:column; gap:32px; padding:80px 120px;">
+    <div class="slide-kicker"></div>
+    <div>
+      <div class="eyebrow">Cache hit trace &middot; abc123…</div>
+      <div class="rule"></div>
+      <div class="title-lg">No buildFromDB span. <span style="color:var(--coral-500);">We never read from the database.</span></div>
+    </div>
+    <div class="trace">
+      <div class="t-head"><span>trace abc123… &middot; cache hit</span><span class="dur">total 8ms</span></div>
+      <div class="span">
+        <div class="label"><span class="depth">├─ </span><span class="svc">encroach</span> <span class="op">HTTP GET /api/territory</span></div>
+        <div class="bar"><div class="fill" style="left:0; width:100%;"></div><div class="ms">8ms</div></div>
+      </div>
+      <div class="span">
+        <div class="label"><span class="depth">│  └─ </span><span class="op">tiles.GetTerritory</span></div>
+        <div class="bar"><div class="fill" style="left:4%; width:75%;"></div><div class="ms">6ms</div></div>
+      </div>
+      <div class="span">
+        <div class="label"><span class="depth">│     └─ </span><span class="op">tiles.cache.get (Redis GET)</span></div>
+        <div class="bar"><div class="fill miss" style="left:8%; width:25%;"></div><div class="ms">2ms</div></div>
+      </div>
+      <div class="attrs">
+        <span class="k">cache.hit:</span> <span class="v">true</span> &nbsp;·&nbsp;
+        <span class="k">cache.age_hours:</span> <span class="v bad">47</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== 21 TRACE WATERFALL — CLAIM VS READ ========== -->
+  <section class="slide slide--content" data-label="21 Trace waterfall — claim vs read"
+    style="display:flex; flex-direction:column; gap:24px; padding:70px 120px;">
+    <div class="slide-kicker"></div>
+    <div>
+      <div class="eyebrow">Two traces. Same system.</div>
+      <div class="rule"></div>
+      <div class="title-lg">Claims go to the database. <span style="color:var(--coral-500);">Reads never do.</span></div>
+    </div>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:40px;">
+      <div class="trace">
+        <div class="t-head"><span>worker trace &middot; runs.processRun</span><span class="dur">total 38ms</span></div>
+        <div class="span">
+          <div class="label"><span class="depth">├─ </span><span class="svc">encroach</span> <span class="op">runs.processRun</span></div>
+          <div class="bar"><div class="fill" style="left:0; width:100%;"></div><div class="ms">38ms</div></div>
+        </div>
+        <div class="span">
+          <div class="label"><span class="depth">│  └─ </span><span class="op">tiles.ClaimTiles</span></div>
+          <div class="bar"><div class="fill" style="left:5%; width:80%;"></div><div class="ms">30ms</div></div>
+        </div>
+        <div class="span">
+          <div class="label"><span class="depth">│     └─ </span><span class="op">db INSERT tile_claims</span></div>
+          <div class="bar"><div class="fill" style="left:10%; width:60%;"></div><div class="ms">22ms</div></div>
+        </div>
+        <div class="attrs">
+          <span class="k">claimed:</span> <span class="v" style="color:var(--teal-500);">23</span> &nbsp;·&nbsp;
+          <span class="k">runner.id:</span> <span class="v">42</span>
+        </div>
+      </div>
+      <div class="trace">
+        <div class="t-head"><span>read trace &middot; tiles.GetTerritory</span><span class="dur">total 8ms</span></div>
+        <div class="span">
+          <div class="label"><span class="depth">├─ </span><span class="svc">encroach</span> <span class="op">HTTP GET /api/territory</span></div>
+          <div class="bar"><div class="fill" style="left:0; width:100%;"></div><div class="ms">8ms</div></div>
+        </div>
+        <div class="span">
+          <div class="label"><span class="depth">│  └─ </span><span class="op">tiles.GetTerritory</span></div>
+          <div class="bar"><div class="fill" style="left:4%; width:75%;"></div><div class="ms">6ms</div></div>
+        </div>
+        <div class="span">
+          <div class="label"><span class="depth">│     └─ </span><span class="op">tiles.cache.get (Redis GET)</span></div>
+          <div class="bar"><div class="fill miss" style="left:8%; width:25%;"></div><div class="ms">2ms</div></div>
+        </div>
+        <div class="attrs">
+          <span class="k">cache.hit:</span> <span class="v bad">true</span> &nbsp;·&nbsp;
+          <span class="k">cache.age_hours:</span> <span class="v bad">47.3</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== 22 SECOND AHA ========== -->
+  <section class="slide slide--content" data-label="22 Second aha"
+    style="display:flex; align-items:center; padding:0 160px;">
+    <div class="slide-kicker"></div>
+    <div style="width:100%;">
+      <div class="eyebrow" style="margin-bottom:20px;">The picture emerges</div>
+      <div class="rule"></div>
+      <div class="title-lg" style="margin-bottom:48px; max-width:1400px;">
+        The system is working <em style="font-style:normal; color:var(--teal-500);">exactly as designed.</em>
+      </div>
+      <div class="lead" style="max-width:1500px; font-size:32px; color:var(--ink-900);">
+        The cache was populated once. No span for <code style="font-family:var(--font-mono); color:var(--blue-700);">buildFromDB</code> after that.<br>
+        Claims are landing in the database — we can see that in the worker traces.<br>
+        But territory reads <span style="color:var(--coral-500); font-weight:700;">never look at the database again.</span>
+      </div>
+      <div style="display:flex; gap:16px; margin-top:48px;">
+        <span class="chip yellow">need: cache_age_hours in every log</span>
+        <span class="chip yellow">need: timestamps</span>
+        <span class="chip yellow">need: the age, in writing</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== 23 TEXT vs STRUCTURED LOGS ========== -->
+  <section class="slide slide--content" data-label="23 Text vs JSON logs"
+    style="display:flex; flex-direction:column; gap:40px; padding:80px 120px;">
+    <div class="slide-kicker"></div>
+    <div>
+      <div class="eyebrow" style="color:var(--accent);">Pillar 03 / 03 &middot; Structured logs</div>
+      <div class="rule"></div>
+      <div class="title-lg">Grep your feelings. Or <em style="font-style:normal; color:var(--teal-500);">query your logs.</em></div>
+    </div>
+    <div class="cols cols-2">
+      <div class="col" style="background:var(--ink-50);">
+        <div class="num" style="background:var(--coral-500); color:#fff;">✕</div>
+        <h3>Plain text</h3>
+        <div style="font-family:var(--font-mono); font-size:20px; line-height:1.5; margin-top:16px; color:var(--ink-900);">2026/01/14 09:41:23 INFO tile cache<br>hit age=47h</div>
+        <p style="margin-top:20px;">Try grepping for &ldquo;all cache hits where age &gt; 24h.&rdquo; You can&rsquo;t.</p>
+      </div>
+      <div class="col" style="background:#0B1220; color:#E6EEFB; border-color:transparent;">
+        <div class="num" style="background:var(--teal-500); color:#fff;">✓</div>
+        <h3 style="color:#fff;">Structured (JSON)</h3>
+<pre style="font-family:var(--font-mono); font-size:18px; line-height:1.5; margin:16px 0 0; color:#E6EEFB; white-space:pre;">{
+  "time": "2026-01-14T09:41:23Z",
+  "level": "INFO",
+  "msg": "tile cache hit",
+  "trace_id": "abc123...",
+  "cache_age_hours": 47.3
+}</pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== 24 SLOG IMPORT (one-liner reveal) ========== -->
+  <section class="slide slide--content" data-label="24 slog import"
+    style="display:flex; align-items:center; justify-content:center; padding:0 220px;">
+    <div class="slide-kicker"></div>
+    <div style="text-align:center;">
+      <div class="eyebrow" style="margin-bottom:32px;">The whole dependency</div>
+      <div class="code" style="display:inline-block; font-size:72px; padding:56px 88px; text-align:left;"><span class="c-key">import</span> <span class="c-str">"log/slog"</span></div>
+      <div class="lead" style="margin-top:56px; font-size:32px; color:var(--ink-900);">
+        Ships with Go since <b>1.21</b>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== 25 SLOG SETUP ========== -->
+  <section class="slide slide--content" data-label="25 slog setup"
+    style="display:block; padding:80px 120px;">
+    <div class="slide-kicker"></div>
+    <div style="display:flex; flex-direction:column; gap:32px; height:100%;">
+      <div style="display:flex; align-items:baseline; gap:32px;">
+        <div class="eyebrow">Setup + one log call</div>
+        <div style="height:1px; flex:1; background:var(--rule);"></div>
+        <div class="lead" style="font-size:22px;">include the <code style="font-family:var(--font-mono); color:var(--blue-700);">trace_id</code> - jump straight to the trace</div>
+      </div>
+      <div class="code" style="font-size:26px; padding:40px 52px; flex:1;"><span class="c-comment">// cmd/server/main.go</span>
+logger := slog.<span class="c-fn">New</span>(slog.<span class="c-fn">NewJSONHandler</span>(os.Stdout, &amp;slog.HandlerOptions{
+    Level: slog.LevelInfo,
+}))
+slog.<span class="c-fn">SetDefault</span>(logger)
+
+<span class="c-comment">// internal/tiles/service.go</span>
+slog.<span class="c-fn">InfoContext</span>(ctx, <span class="c-str">"tile cache hit"</span>,
+    <span class="c-str">"cache_age_hours"</span>, ageHours,
+    <span class="c-str">"trace_id"</span>, span.<span class="c-fn">SpanContext</span>().<span class="c-fn">TraceID</span>().<span class="c-fn">String</span>(),
+)</div>
+    </div>
+  </section>
+
+
+  <!-- ========== D4 DEMO — FULL ========== -->
+  <section class="slide slide--content demo-slide" data-label="D4 Demo · full" style="position:relative; overflow:hidden; background:#0B1220; color:#E6EEFB;">
+    <div style="position:absolute; inset:0; background-image: linear-gradient(rgba(75,195,216,0.09) 1px, transparent 1px), linear-gradient(90deg, rgba(75,195,216,0.09) 1px, transparent 1px); background-size: 80px 80px; background-position: -1px -1px; pointer-events:none;"></div>
+    <div style="position:absolute; top:0; left:0; width:520px; height:520px; background: radial-gradient(circle at 0 0, rgba(255,208,57,0.14), transparent 65%); pointer-events:none;"></div>
+    <div style="position:absolute; bottom:0; right:0; width:640px; height:640px; background: radial-gradient(circle at 100% 100%, rgba(239,121,132,0.12), transparent 65%); pointer-events:none;"></div>
+    <div style="position:absolute; left:120px; top:120px; font-family:var(--font-mono); color:#4BC3D8; font-size:26px; letter-spacing:0.14em; text-transform:uppercase; opacity:0.85; pointer-events:none;">&#9679; REC &middot; live</div>
+    <div class="slide-kicker">Live demo</div>
+    <div style="position:absolute; inset:0; display:flex; flex-direction:column; justify-content:center; padding:0 160px; z-index:2; gap:56px;">
+      <div>
+        <div style="font-family:var(--font-mono); font-size:28px; letter-spacing:0.18em; text-transform:uppercase; color:var(--teal-400); margin-bottom:24px;">bin/demo &middot; mode: <span style="color:var(--yellow-400);">full</span></div>
+        <div style="font-size:168px; font-weight:800; letter-spacing:-0.03em; line-height:0.95; color:#fff; margin-bottom:24px;">Demo time.</div>
+        <div style="font-size:44px; color:var(--fg-on-hero-muted); font-weight:500; max-width:1500px;">Metrics + traces + structured logs, together. Filter, pivot, jump between them by trace_id.</div>
+      </div>
+      <div style="display:flex; gap:16px; flex-wrap:wrap;">
+        <span class="pill" style="font-size:24px; padding:10px 22px;">filter: msg=tile cache hit</span>
+        <span class="pill" style="font-size:24px; padding:10px 22px;">click trace_id → OpenObserve</span>
+        <span class="pill" style="font-size:24px; padding:10px 22px;">cache_age_hours &gt; 24</span>
+      </div>
+      <div style="display:flex; align-items:center; gap:20px; color:var(--fg-on-hero-muted); font-family:var(--font-mono); font-size:22px;">
+        <span style="color:var(--teal-400);">▸</span>
+        <span>next: <em style="font-style:normal; color:#fff;">the log query that lands it</em></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== 26 LOG SEARCH — cache age ========== -->
+  <section class="slide slide--content" data-label="26 Log search — cache age"
+    style="display:flex; flex-direction:column; gap:32px; padding:80px 120px;">
+    <div class="slide-kicker"></div>
+    <div>
+      <div class="eyebrow">Log search &middot; msg = &ldquo;tile cache hit&rdquo;</div>
+      <div class="rule"></div>
+      <div class="title-lg">Cache age 47 hours. <span style="color:var(--coral-500);">Every request.</span></div>
+    </div>
+    <div class="log-feed" style="flex:1;">
+      <div class="log-line">
+        <div><div class="ts">09:41:23</div><div class="lv">INFO</div></div>
+        <div><div class="msg">tile cache hit</div>
+          <div class="kv"><span class="k">trace_id=</span><span class="v">abc123…</span>  <span class="k">cache_age_hours=</span><span class="v hi">47.3</span></div>
+        </div>
+      </div>
+      <div class="log-line">
+        <div><div class="ts">09:38:17</div><div class="lv">INFO</div></div>
+        <div><div class="msg">tile cache hit</div>
+          <div class="kv"><span class="k">trace_id=</span><span class="v">def456…</span>  <span class="k">cache_age_hours=</span><span class="v hi">47.1</span></div>
+        </div>
+      </div>
+      <div class="log-line">
+        <div><div class="ts">09:35:44</div><div class="lv">INFO</div></div>
+        <div><div class="msg">tile cache hit</div>
+          <div class="kv"><span class="k">trace_id=</span><span class="v">ghi789…</span>  <span class="k">cache_age_hours=</span><span class="v hi">46.8</span></div>
+        </div>
+      </div>
+      <div class="log-line">
+        <div><div class="ts">09:32:08</div><div class="lv">INFO</div></div>
+        <div><div class="msg">tile cache hit</div>
+          <div class="kv"><span class="k">trace_id=</span><span class="v">jkl012…</span>  <span class="k">cache_age_hours=</span><span class="v hi">46.6</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== 27 ROOT CAUSE ========== -->
+  <section class="slide slide--content" data-label="27 Root cause"
+    style="display:flex; align-items:center; padding:0 160px;">
+    <div class="slide-kicker"></div>
+    <div style="max-width:1500px;">
+      <div class="eyebrow" style="margin-bottom:20px; color:var(--coral-500);">Root cause</div>
+      <div class="rule"></div>
+      <div class="title-lg" style="margin-bottom:48px;">
+        Claims land in Postgres. <br/><em style="font-style:normal; color:var(--coral-500);">The cache is never invalidated.</em>
+      </div>
+      <div class="lead" style="font-size:28px; color:var(--ink-900); max-width:1500px;">
+        After a claim is written, no one calls <code style="font-family:var(--font-mono); color:var(--blue-700);">s.rdb.Del(ctx, cacheKey)</code>.<br>
+        So every territory read returns the same snapshot from 47 hours ago. The database has the truth. The cache <b>never asks for it</b>.
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== 28 THE FIX — 1 line ========== -->
+  <section class="slide slide--content" data-label="28 The fix"
+    style="display:block; padding:80px 120px;">
+    <div class="slide-kicker"></div>
+    <div style="display:flex; flex-direction:column; gap:32px; height:100%;">
+      <div style="display:flex; align-items:baseline; gap:32px;">
+        <div class="eyebrow">The fix &middot; one line</div>
+        <div style="height:1px; flex:1; background:var(--rule);"></div>
+        <div class="lead" style="font-size:22px;">not a Go fix - a <em style="font-style:normal; color:var(--teal-500);">logic</em> fix</div>
+      </div>
+      <div class="code" style="font-size:28px; padding:44px 56px; flex:1;"><span class="c-key">func</span> (s *Service) <span class="c-fn">ClaimTiles</span>(ctx context.Context, runnerID <span class="c-type">int64</span>, tiles []Tile) <span class="c-type">error</span> {
+    <span class="c-comment">// ... write claims to Postgres ...</span>
+    <span class="c-key">if</span> err := s.db.<span class="c-fn">InsertClaims</span>(ctx, runnerID, tiles); err != <span class="c-key">nil</span> {
+        <span class="c-key">return</span> err
+    }
+
+    <span class="c-hi">    <span class="c-comment">// Invalidate cache so next GetTerritory rebuilds from DB</span>
+    <span class="c-key">return</span> s.rdb.<span class="c-fn">Del</span>(ctx, cacheKey).<span class="c-fn">Err</span>()</span>
+}</div>
+    </div>
+  </section>
+
+
+  <!-- ========== D5 DEMO — FIXED ========== -->
+  <section class="slide slide--content demo-slide" data-label="D5 Demo · fixed" style="position:relative; overflow:hidden; background:#0B1220; color:#E6EEFB;">
+    <div style="position:absolute; inset:0; background-image: linear-gradient(rgba(75,195,216,0.09) 1px, transparent 1px), linear-gradient(90deg, rgba(75,195,216,0.09) 1px, transparent 1px); background-size: 80px 80px; background-position: -1px -1px; pointer-events:none;"></div>
+    <div style="position:absolute; top:0; left:0; width:520px; height:520px; background: radial-gradient(circle at 0 0, rgba(255,208,57,0.14), transparent 65%); pointer-events:none;"></div>
+    <div style="position:absolute; bottom:0; right:0; width:640px; height:640px; background: radial-gradient(circle at 100% 100%, rgba(239,121,132,0.12), transparent 65%); pointer-events:none;"></div>
+    <div style="position:absolute; left:120px; top:120px; font-family:var(--font-mono); color:#4BC3D8; font-size:26px; letter-spacing:0.14em; text-transform:uppercase; opacity:0.85; pointer-events:none;">&#9679; REC &middot; live</div>
+    <div class="slide-kicker">Live demo</div>
+    <div style="position:absolute; inset:0; display:flex; flex-direction:column; justify-content:center; padding:0 160px; z-index:2; gap:56px;">
+      <div>
+        <div style="font-family:var(--font-mono); font-size:28px; letter-spacing:0.18em; text-transform:uppercase; color:var(--teal-400); margin-bottom:24px;">bin/demo &middot; mode: <span style="color:var(--yellow-400);">fixed</span></div>
+        <div style="font-size:168px; font-weight:800; letter-spacing:-0.03em; line-height:0.95; color:#fff; margin-bottom:24px;">Demo time.</div>
+        <div style="font-size:44px; color:var(--fg-on-hero-muted); font-weight:500; max-width:1500px;">One line added. Watch the cache age fall; watch cache misses appear; watch runners claim territory in real time.</div>
+      </div>
+      <div style="display:flex; gap:16px; flex-wrap:wrap;">
+        <span class="pill" style="font-size:24px; padding:10px 22px;">cache age drops</span>
+        <span class="pill" style="font-size:24px; padding:10px 22px;">cache miss rate climbs</span>
+        <span class="pill" style="font-size:24px; padding:10px 22px;">Marcus’s map updates live</span>
+      </div>
+      <div style="display:flex; align-items:center; gap:20px; color:var(--fg-on-hero-muted); font-family:var(--font-mono); font-size:22px;">
+        <span style="color:var(--teal-400);">▸</span>
+        <span>next: <em style="font-style:normal; color:#fff;">the 48-minute timeline</em></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== 29 TIMELINE — 48 minutes ========== -->
+  <section class="slide slide--content" data-label="29 48 minutes"
+    style="display:grid; grid-template-columns: 1fr 1fr; gap:80px; padding:96px 140px; align-items:center;">
+    <div class="slide-kicker"></div>
+    <div>
+      <div class="eyebrow" style="margin-bottom:20px; font-size:24px;">Message to fix</div>
+      <div class="rule"></div>
+      <div style="display:flex; align-items:baseline; gap:20px; line-height:0.85;">
+        <span style="font-size:320px; font-weight:800; letter-spacing:-0.04em; color:var(--coral-500); font-variant-numeric:tabular-nums;">48</span>
+        <span style="font-size:80px; font-weight:700; color:var(--ink-900); letter-spacing:-0.02em;">minutes</span>
+      </div>
+      <div style="margin-top:48px; font-size:40px; line-height:1.25; color:var(--ink-900); font-weight:500; letter-spacing:-0.01em; max-width:720px; text-wrap:pretty;">
+        Without observability? I&rsquo;d still be adding <code style="font-family:var(--font-mono); color:var(--coral-500); font-size:36px;">fmt.Println</code> calls.
+      </div>
+    </div>
+    <div class="timeline" style="font-size:32px;">
+      <div class="row" style="font-size:32px; grid-template-columns:190px 16px 1fr;"><span class="t">9:47 AM</span><span class="dot"></span><span class="ev">Marcus&rsquo;s message arrives</span></div>
+      <div class="row" style="font-size:32px; grid-template-columns:190px 16px 1fr;"><span class="t">9:52 AM</span><span class="dot"></span><span class="ev">Logs — nothing useful</span></div>
+      <div class="row key" style="font-size:32px; grid-template-columns:190px 16px 1fr;"><span class="t">10:05 AM</span><span class="dot"></span><span class="ev">Metrics — cache hit rate 100%</span></div>
+      <div class="row key" style="font-size:32px; grid-template-columns:190px 16px 1fr;"><span class="t">10:12 AM</span><span class="dot"></span><span class="ev">Traces — no buildFromDB span, cache 47h old</span></div>
+      <div class="row key" style="font-size:32px; grid-template-columns:190px 16px 1fr;"><span class="t">10:18 AM</span><span class="dot"></span><span class="ev">Structured logs — cache_age_hours: 47 on every request</span></div>
+      <div class="row" style="font-size:32px; grid-template-columns:190px 16px 1fr;"><span class="t">10:25 AM</span><span class="dot"></span><span class="ev">Root cause identified</span></div>
+      <div class="row end" style="font-size:32px; grid-template-columns:190px 16px 1fr;"><span class="t">10:35 AM</span><span class="dot"></span><span class="ev">Fix deployed</span></div>
+    </div>
+  </section>
+
+  <!-- ========== 30 SECTION — NEVER AGAIN ========== -->
+  <section class="slide slide--hero slide--section" data-label="30 Act 03 · Never again">
+    <div class="hero-bg"></div><div class="wedge-yellow"></div><div class="wedge-coral"></div>
+    <div class="slide-kicker">Act 03 &middot; 26:00 – 33:00</div>
+    <div style="position:absolute; inset:0; display:flex; align-items:center; padding:0 160px; z-index:2;">
+      <div>
+        <div class="chapter-num">Act three</div>
+        <div class="section-title">Never&nbsp;<em>again</em>.</div>
+        <div class="section-sub">alert on silence</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== 31 TRADITIONAL ALERTS — ALL GREEN ========== -->
+  <section class="slide slide--content" data-label="31 All green"
+    style="display:flex; flex-direction:column; gap:40px; padding:80px 160px; justify-content:center;">
+    <div class="slide-kicker"></div>
+    <div>
+      <div class="eyebrow">Traditional alerting during this incident</div>
+      <div class="rule"></div>
+      <div class="title-lg">Not failing. <em style="font-style:normal; color:var(--coral-500);">Succeeding at the wrong thing.</em></div>
+    </div>
+    <div class="green-list">
+      <div class="row"><div class="check">✓</div><div>Error rate &gt; 1%</div><div class="status">not firing (0%)</div></div>
+      <div class="row"><div class="check">✓</div><div>p99 latency &gt; 500ms</div><div class="status">not firing (127ms)</div></div>
+      <div class="row"><div class="check">✓</div><div>5xx responses &gt; 10/min</div><div class="status">not firing (0)</div></div>
+      <div class="row"><div class="check">✓</div><div>Failed goroutines &gt; 5</div><div class="status">not firing (0)</div></div>
+    </div>
+    <div style="display:flex; align-items:center; gap:24px;">
+      <span class="chip green">all green</span>
+      <span class="chip red">runners affected: unknown</span>
+    </div>
+  </section>
+
+  <!-- ========== 32 SYMPTOMS VS BEHAVIOR ========== -->
+  <section class="slide slide--content" data-label="32 Symptoms vs behavior"
+    style="display:flex; flex-direction:column; gap:48px; padding:100px 160px; justify-content:center;">
+    <div class="slide-kicker"></div>
+    <div>
+      <div class="eyebrow">The shift</div>
+      <div class="rule"></div>
+      <div class="title-lg">Stop watching for <em style="font-style:normal; color:var(--coral-500);">failure.</em><br>Start watching for <em style="font-style:normal; color:var(--teal-500);">weirdness.</em></div>
+    </div>
+    <div class="cols cols-2">
+      <div class="col" style="border-top:6px solid var(--coral-500);">
+        <div style="font-size:18px; letter-spacing:0.14em; text-transform:uppercase; color:var(--coral-500); font-weight:700; margin-bottom:20px;">Symptom alerts &middot; reactive</div>
+        <ul style="margin:0; padding:0; list-style:none;">
+          <li style="font-size:28px; line-height:1.4; margin-bottom:12px;">&ldquo;Errors are happening&rdquo;</li>
+          <li style="font-size:28px; line-height:1.4; margin-bottom:12px;">&ldquo;Users are complaining&rdquo;</li>
+          <li style="font-size:28px; line-height:1.4;">&ldquo;Workers are failing&rdquo;</li>
+        </ul>
+        <div style="font-size:20px; color:var(--fg-muted); margin-top:20px;">…after the damage.</div>
+      </div>
+      <div class="col" style="border-top:6px solid var(--teal-500);">
+        <div style="font-size:18px; letter-spacing:0.14em; text-transform:uppercase; color:var(--teal-500); font-weight:700; margin-bottom:20px;">Behavior alerts &middot; proactive</div>
+        <ul style="margin:0; padding:0; list-style:none;">
+          <li style="font-size:28px; line-height:1.4; margin-bottom:12px;">&ldquo;Cache is never invalidated after claims&rdquo;</li>
+          <li style="font-size:28px; line-height:1.4; margin-bottom:12px;">&ldquo;Cache is getting stale&rdquo;</li>
+          <li style="font-size:28px; line-height:1.4;">&ldquo;Hit rate is suspiciously high&rdquo;</li>
+        </ul>
+        <div style="font-size:20px; color:var(--fg-muted); margin-top:20px;">…before runners notice.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== 33 THREE ALERTS ========== -->
+  <section class="slide slide--content" data-label="33 Three alerts"
+    style="display:flex; flex-direction:column; gap:32px; padding:80px 120px;">
+    <div class="slide-kicker"></div>
+    <div>
+      <div class="eyebrow">prometheus/alerts.yml &middot; three rules</div>
+      <div class="rule"></div>
+      <div class="title-lg">What <em style="font-style:normal; color:var(--teal-500);">should</em> be happening - and isn&rsquo;t.</div>
+    </div>
+    <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:32px; flex:1;">
+      <div class="alert-card">
+        <div class="name">01 &middot; hit rate</div>
+        <div class="title">Tile cache not refreshing</div>
+        <div class="expr">tile_cache_hits_total / (hits + misses) &gt; 0.99
+for: 1h</div>
+        <div class="desc">A healthy cache has misses. None for an hour = stuck.</div>
+      </div>
+      <div class="alert-card">
+        <div class="name">02 &middot; cache age</div>
+        <div class="title">Tile cache stale</div>
+        <div class="expr">tile_cache_age_hours &gt; 6</div>
+        <div class="desc">Our bug pushed this to 47h. This alert fires at 6.</div>
+      </div>
+      <div class="alert-card" style="border-color:var(--coral-500); border-width:2px;">
+        <div class="name">03 &middot; never expires</div>
+        <div class="title">Cache never rebuilt</div>
+        <div class="expr">increase(tile_cache_misses_total[6h]) == 0</div>
+        <div class="desc">Zero cache misses in 6 hours means invalidation stopped. Page me.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== 34 TIMELINE SHIFT ========== -->
+  <section class="slide slide--content" data-label="34 Timeline shift"
+    style="display:grid; grid-template-columns: 1fr 1fr; gap:80px; padding:100px 160px; align-items:center;">
+    <div class="slide-kicker"></div>
+    <div>
+      <div class="eyebrow" style="margin-bottom:20px; font-size:24px;">Without the alerts</div>
+      <div class="rule" style="background:var(--coral-500);"></div>
+      <div style="font-size:168px; font-weight:800; letter-spacing:-0.035em; line-height:0.9; color:var(--ink-900);">9:47<span style="font-size:64px; color:var(--fg-muted); font-weight:600;"> AM</span></div>
+      <div style="margin-top:32px; font-size:36px; line-height:1.25; color:var(--ink-900); font-weight:500; max-width:640px; text-wrap:pretty;">Marcus messages. First we hear of it.</div>
+    </div>
+    <div>
+      <div class="eyebrow" style="margin-bottom:20px; color:var(--teal-500); font-size:24px;">With the alerts</div>
+      <div class="rule" style="background:var(--teal-500);"></div>
+      <div style="font-size:168px; font-weight:800; letter-spacing:-0.035em; line-height:0.9; color:var(--teal-500);">3:47<span style="font-size:64px; color:var(--fg-muted); font-weight:600;"> AM</span></div>
+      <div style="margin-top:32px; font-size:36px; line-height:1.25; color:var(--ink-900); font-weight:500; max-width:680px; text-wrap:pretty;">Hit rate alert. Fix deployed by 4:15. Marcus runs at 6:30, map updates live - never messages.</div>
+      <div style="margin-top:28px;"><span class="chip green" style="font-size:24px;">6 hours earlier &middot; zero runners affected</span></div>
+    </div>
+  </section>
+
+  <!-- ========== 35 ALERT FATIGUE ========== -->
+  <section class="slide slide--content" data-label="35 Alert fatigue"
+    style="display:flex; align-items:center; padding:0 160px;">
+    <div class="slide-kicker"></div>
+    <div style="width:100%;">
+      <div class="eyebrow" style="margin-bottom:20px;">Alert fatigue</div>
+      <div class="rule"></div>
+      <div class="title-lg" style="margin-bottom:48px; max-width:1400px;">
+        Would I <em style="font-style:normal; color:var(--coral-500);">mass-notify users</em> about this?
+      </div>
+      <div class="knows">
+        <div>
+          <h3 style="color:var(--coral-500);">Page-worthy</h3>
+          <ul>
+            <li>&ldquo;We stopped talking to our data source&rdquo;</li>
+            <li>&ldquo;Data is visibly stale to users&rdquo;</li>
+            <li>&ldquo;Core business function is degraded&rdquo;</li>
+          </ul>
+        </div>
+        <div>
+          <h3 style="color:var(--fg-muted);">Dashboard-only</h3>
+          <ul>
+            <li>Cache hit rate (interesting, not urgent)</li>
+            <li>Request rate fluctuations</li>
+            <li>Individual slow requests</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== 36 ANTI-PATTERN 1 ========== -->
+  <section class="slide slide--content" data-label="36 Anti 1 — no errors"
+    style="display:flex; align-items:center; padding:0 160px;">
+    <div class="slide-kicker"></div>
+    <div class="anti" style="width:100%;">
+      <div class="num">01</div>
+      <div class="body">
+        <div class="eyebrow" style="color:var(--coral-500); margin-bottom:20px;">Anti-pattern 01</div>
+        <div class="head">&ldquo;No errors&rdquo; = <em style="font-style:normal; color:var(--coral-500);">no problems.</em></div>
+        <div class="lead">Zero panics. Zero failed goroutines. Zero error logs. Runners getting stale territory for days.</div>
+        <div class="fix-head">Instead, track success</div>
+        <ul>
+          <li>Tiles refreshed in last hour</li>
+          <li>Fresh data served to runner</li>
+          <li>Run processed <b>and</b> territory visible</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== 37 ANTI-PATTERN 2 ========== -->
+  <section class="slide slide--content" data-label="37 Anti 2 — invisible invalidation"
+    style="display:flex; align-items:center; padding:0 160px;">
+    <div class="slide-kicker"></div>
+    <div class="anti" style="width:100%;">
+      <div class="num">02</div>
+      <div class="body">
+        <div class="eyebrow" style="color:var(--coral-500); margin-bottom:20px;">Anti-pattern 02</div>
+        <div class="head">Caching without <em style="font-style:normal; color:var(--coral-500);">an invalidation strategy.</em></div>
+        <div class="lead">The write path and the cache path were written by two different people. Neither thought the other one would handle it.</div>
+        <div class="fix-head">Instead, make it explicit</div>
+        <ul>
+          <li>Invalidation is part of the feature, not an afterthought</li>
+          <li>Log every cache write and every invalidation</li>
+          <li>Alert on &ldquo;no invalidations in N hours during active writes&rdquo;</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== 38 ANTI-PATTERN 3 ========== -->
+  <section class="slide slide--content" data-label="38 Anti 3 — incomplete cache"
+    style="display:flex; align-items:center; padding:0 160px;">
+    <div class="slide-kicker"></div>
+    <div class="anti" style="width:100%;">
+      <div class="num">03</div>
+      <div class="body">
+        <div class="eyebrow" style="color:var(--coral-500); margin-bottom:20px;">Anti-pattern 03</div>
+        <div class="head">Tracking hits and misses, <em style="font-style:normal; color:var(--coral-500);">not age.</em></div>
+        <div class="lead">100% hit rate sounds great - until you realise the cache is two days old.</div>
+        <div class="fix-head">Instead, track age</div>
+        <ul>
+          <li><code style="font-family:var(--font-mono); color:var(--blue-700);">tile_cache_age_hours</code> - a gauge</li>
+          <li>2 hours average - healthy</li>
+          <li>47 hours average - definitely not healthy</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== 39 ANTI-PATTERN 4 ========== -->
+  <section class="slide slide--content" data-label="39 Anti 4 — cardinality"
+    style="display:block; padding:80px 120px;">
+    <div class="slide-kicker"></div>
+    <div style="display:flex; flex-direction:column; gap:32px; height:100%;">
+      <div style="display:flex; align-items:baseline; gap:32px;">
+        <div class="eyebrow" style="color:var(--coral-500);">Anti-pattern 04 &middot; high-cardinality labels</div>
+        <div style="height:1px; flex:1; background:var(--rule);"></div>
+        <div class="lead" style="font-size:22px;">a very bad day for your Prometheus</div>
+      </div>
+      <div class="code" style="font-size:28px; padding:40px 52px;"><span class="c-comment">// Don't do this:</span>
+tile_cache_hits_total{<span class="c-str">runner_id</span>=<span class="c-str">"1"</span>}
+tile_cache_hits_total{<span class="c-str">runner_id</span>=<span class="c-str">"2"</span>}
+tile_cache_hits_total{<span class="c-str">runner_id</span>=<span class="c-str">"3"</span>}
+<span class="c-comment">// × 10,000 runners × 5 metrics = Prometheus explodes</span></div>
+      <div class="cols cols-2" style="margin-top:auto;">
+        <div class="col" style="border-top:6px solid var(--accent);">
+          <div style="font-size:18px; letter-spacing:0.14em; text-transform:uppercase; font-weight:700; color:var(--accent); margin-bottom:12px;">Metrics</div>
+          <p style="font-size:24px;">Aggregate patterns. Rate, p99, by endpoint.</p>
+        </div>
+        <div class="col" style="border-top:6px solid var(--teal-500);">
+          <div style="font-size:18px; letter-spacing:0.14em; text-transform:uppercase; font-weight:700; color:var(--teal-500); margin-bottom:12px;">Traces / Logs</div>
+          <p style="font-size:24px;">Individual detail. <code style="font-family:var(--font-mono);">runner_id</code>, <code style="font-family:var(--font-mono);">tile_id</code>.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ========== THREE PILLARS SUMMARY ========== -->
+  <section class="slide slide--content" data-label="P Three pillars recap"
+    style="display:flex; flex-direction:column; gap:48px; padding:100px 140px; justify-content:center;">
+    <div class="slide-kicker"></div>
+    <div>
+      <div class="eyebrow" style="color:var(--accent);">The three pillars &middot; recap</div>
+      <div class="rule"></div>
+      <div class="title-lg">What each one <em style="font-style:normal; color:var(--teal-500);">actually</em> told us.</div>
+    </div>
+    <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:40px;">
+      <div style="background:var(--paper); border:1px solid var(--rule); border-top:6px solid var(--accent); border-radius:var(--r-lg); padding:36px 40px; box-shadow:var(--shadow-md);">
+        <div style="font-family:var(--font-mono); font-size:18px; letter-spacing:0.14em; text-transform:uppercase; color:var(--accent); font-weight:700; margin-bottom:18px;">01 &middot; Metrics</div>
+        <div style="font-size:28px; font-weight:700; color:var(--ink-900); margin-bottom:16px;"><code style="font-family:var(--font-mono); color:var(--blue-700); font-size:22px;">prometheus/client_golang</code></div>
+        <div style="font-size:26px; line-height:1.4; color:var(--ink-900);">&ldquo;Cache hit rate is 100% - nothing is refreshing.&rdquo;</div>
+      </div>
+      <div style="background:var(--paper); border:1px solid var(--rule); border-top:6px solid var(--teal-500); border-radius:var(--r-lg); padding:36px 40px; box-shadow:var(--shadow-md);">
+        <div style="font-family:var(--font-mono); font-size:18px; letter-spacing:0.14em; text-transform:uppercase; color:var(--teal-500); font-weight:700; margin-bottom:18px;">02 &middot; Traces</div>
+        <div style="font-size:28px; font-weight:700; color:var(--ink-900); margin-bottom:16px;"><code style="font-family:var(--font-mono); color:var(--blue-700); font-size:22px;">go.opentelemetry.io/otel</code></div>
+        <div style="font-size:26px; line-height:1.4; color:var(--ink-900);">&ldquo;Trace ends at Redis — no buildFromDB span — cache 47h old.&rdquo;</div>
+      </div>
+      <div style="background:var(--paper); border:1px solid var(--rule); border-top:6px solid var(--coral-500); border-radius:var(--r-lg); padding:36px 40px; box-shadow:var(--shadow-md);">
+        <div style="font-family:var(--font-mono); font-size:18px; letter-spacing:0.14em; text-transform:uppercase; color:var(--coral-500); font-weight:700; margin-bottom:18px;">03 &middot; Logs</div>
+        <div style="font-size:28px; font-weight:700; color:var(--ink-900); margin-bottom:16px;"><code style="font-family:var(--font-mono); color:var(--blue-700); font-size:22px;">log/slog</code> &middot; stdlib</div>
+        <div style="font-size:26px; line-height:1.4; color:var(--ink-900);">&ldquo;cache_age_hours: 47 on every request — cache set once, never rebuilt.&rdquo;</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== 40 THIS WEEK ========== -->
+  <section class="slide slide--content" data-label="40 This week"
+    style="display:flex; flex-direction:column; gap:40px; padding:80px 160px; justify-content:center;">
+    <div class="slide-kicker"></div>
+    <div>
+      <div class="eyebrow" style="color:var(--teal-500);">75 minutes to production-grade observability</div>
+      <div class="rule"></div>
+      <div class="title-lg">This week.</div>
+    </div>
+    <div class="week">
+      <div class="day">
+        <div class="d">Monday</div>
+        <div class="what"><span class="pkg">prometheus/client_golang</span> + chi middleware<span class="goal">RED metrics on every endpoint</span></div>
+        <div class="time">30 min</div>
+      </div>
+      <div class="day">
+        <div class="d">Tuesday</div>
+        <div class="what"><span class="pkg">go.opentelemetry.io/otel</span> + otelhttp<span class="goal">Traces through your whole stack</span></div>
+        <div class="time">20 min</div>
+      </div>
+      <div class="day">
+        <div class="d">Wednesday</div>
+        <div class="what"><span class="pkg">log/slog</span> - stdlib, Go 1.21+<span class="goal">Structured, queryable logs</span></div>
+        <div class="time">15 min</div>
+      </div>
+      <div class="day">
+        <div class="d">Thursday</div>
+        <div class="what">One <em style="font-style:normal; color:var(--coral-500);">silence</em> alert<span class="goal">&ldquo;This should be happening and isn&rsquo;t&rdquo;</span></div>
+        <div class="time">10 min</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== 41 CALLBACK — Marcus message ========== -->
+  <section class="slide slide--content" data-label="41 Callback"
+    style="display:flex; align-items:center; justify-content:center; padding:100px 160px; background:var(--ink-100);">
+    <div class="slide-kicker" style="color:var(--fg-muted);">Remember this?</div>
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:80px; align-items:center; max-width:1700px;">
+      <div class="email-card">
+        <div class="field"><div class="k">Channel</div><div class="v">#support &middot; Tuesday 9:47 AM</div></div>
+        <div class="field"><div class="k">From</div><div class="v">Marcus</div></div>
+        <div class="divider"></div>
+        <div class="body">
+          <p>I ran 8 miles this morning and claimed 14 blocks.</p>
+          <p>My map shows zero new territory.</p>
+          <div class="sig">— Marcus</div>
+        </div>
+      </div>
+      <div>
+        <div class="eyebrow" style="margin-bottom:16px;">Let&rsquo;s run Tuesday again</div>
+        <div class="rule"></div>
+        <div class="title-lg">This time <em style="font-style:normal; color:var(--teal-500);">I know first.</em></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== 42 NEW TUESDAY ========== -->
+  <section class="slide slide--content" data-label="42 New Tuesday"
+    style="display:grid; grid-template-columns:0.8fr 1.2fr; gap:80px; padding:100px 160px; align-items:center;">
+    <div class="slide-kicker"></div>
+    <div>
+      <div class="eyebrow" style="margin-bottom:16px; color:var(--teal-500);">The new Tuesday</div>
+      <div class="rule"></div>
+      <div class="title-lg">He never messages.</div>
+      <div class="lead" style="margin-top:32px;">Because there&rsquo;s nothing to message about.</div>
+    </div>
+    <div class="timeline">
+      <div class="row key"><span class="t">3:47 AM</span><span class="dot"></span><span class="ev">Alert: cache hit rate 100% for 1h</span></div>
+      <div class="row"><span class="t">3:48 AM</span><span class="dot"></span><span class="ev">Grafana: cache age 47h, zero misses since 3am</span></div>
+      <div class="row"><span class="t">3:52 AM</span><span class="dot"></span><span class="ev">OpenObserve: no buildFromDB span in 47 hours</span></div>
+      <div class="row"><span class="t">3:58 AM</span><span class="dot"></span><span class="ev">Logs: cache_age_hours: 47 on every entry</span></div>
+      <div class="row end"><span class="t">4:15 AM</span><span class="dot"></span><span class="ev">Fix deployed. Cache refreshing.</span></div>
+      <div class="row"><span class="t">6:30 AM</span><span class="dot" style="background:var(--teal-500);"></span><span class="ev">Marcus runs. Map updates live.</span></div>
+    </div>
+  </section>
+
+  <!-- ========== 43 CLOSER — future self ========== -->
+  <section class="slide slide--hero" data-label="43 Future self" style="padding:0;">
+    <div class="hero-bg" style="opacity:0.85;"></div>
+    <div class="wedge-yellow" style="width:22%;"></div>
+    <div class="wedge-coral"  style="width:16%;"></div>
+    <div class="slide-kicker">Thank you</div>
+    <div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; z-index:2; padding:0 220px;">
+      <div style="display:grid; grid-template-columns: 140px 1fr; gap:56px; align-items:flex-start; max-width:1500px;">
+        <div class="quote-mark" style="color:var(--teal-500); font-size:220px;">&ldquo;</div>
+        <div>
+          <div class="quote-body" style="color:#fff; font-size:80px; font-weight:500;">
+            Your future self is the&nbsp;customer of your&nbsp;observability.
+          </div>
+          <div class="quote-attr" style="color:var(--fg-on-hero-muted); margin-top:48px;">
+            Be kind to them &middot; 
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== 44 RESOURCES ========== -->
+  <section class="slide slide--hero" data-label="44 Resources" style="padding:0;">
+    <div class="hero-bg"></div>
+    <div class="wedge-yellow" style="width:20%;"></div>
+    <div class="wedge-coral"  style="width:14%;"></div>
+    <div class="slide-kicker">Questions?</div>
+    <div style="position:absolute; inset:0; display:flex; align-items:center; padding:0 200px; z-index:2;">
+      <div style="display:grid; grid-template-columns:1fr auto; gap:80px; align-items:center; width:100%;">
+        <div>
+          <div style="font-family:var(--font-mono); font-size:20px; letter-spacing:0.14em; text-transform:uppercase; color:var(--teal-400); margin-bottom:24px;">Resources</div>
+          <div style="font-size:96px; font-weight:800; letter-spacing:-0.03em; line-height:1; color:#fff; margin-bottom:56px;">
+            Full slides &amp; demo app on <span style="color:var(--yellow-400);">GitHub</span>
+          </div>
+          <div class="rez" style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:64px;">
+            <div class="group">
+              <h4>Packages</h4>
+              <ul>
+                <li>prometheus/client_golang</li>
+                <li>go.opentelemetry.io/otel</li>
+                <li>log/slog &middot; stdlib</li>
+              </ul>
+            </div>
+            <div class="group">
+              <h4>Tools</h4>
+              <ul>
+                <li>Grafana</li>
+                <li>OpenObserve</li>
+                <li>Prometheus</li>
+              </ul>
+            </div>
+            <div class="group">
+              <h4>Me</h4>
+              <ul>
+                <li></li>
+                <li class="body">encroach.app</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        <div style="flex-shrink:0;">
+          <img src="assets/qr-code.png" style="width:280px; height:280px; border-radius:var(--r-lg); display:block;">
+        </div>
+      </div>
+    </div>
+  </section>
+
+</deck-stage>
+
+<div id="tweaks-panel">
+  <h3>Tweaks · text scale</h3>
+  <label>Headlines <span class="val" id="v-head">1.00×</span></label>
+  <div class="row"><input type="range" id="s-head" min="0.7" max="1.6" step="0.02"></div>
+  <label>Lead / intro <span class="val" id="v-lead">1.00×</span></label>
+  <div class="row"><input type="range" id="s-lead" min="0.7" max="1.8" step="0.02"></div>
+  <label>Lists & timeline rows <span class="val" id="v-list">1.00×</span></label>
+  <div class="row"><input type="range" id="s-list" min="0.7" max="1.8" step="0.02"></div>
+  <label>Code blocks <span class="val" id="v-code">1.00×</span></label>
+  <div class="row"><input type="range" id="s-code" min="0.8" max="1.6" step="0.02"></div>
+  <label>Traces & logs <span class="val" id="v-trace">1.00×</span></label>
+  <div class="row"><input type="range" id="s-trace" min="0.8" max="1.6" step="0.02"></div>
+  <label>Chart & alert chrome <span class="val" id="v-micro">1.00×</span></label>
+  <div class="row"><input type="range" id="s-micro" min="0.8" max="1.6" step="0.02"></div>
+  <button class="reset" id="reset-tweaks">Reset to defaults</button>
+</div>
+
+<script>
+  const TWEAK_DEFAULS = /*EDITMODE-BEGIN*/{
+    "codeScale": 1,
+    "traceScale": 1,
+    "microScale": 1.16,
+    "headlineScale": 1.5,
+    "leadScale": 1.4,
+    "listScale": 1.38
+  }/*EDITMODE-END*/;
+
+  const root = document.documentElement;
+  const panel = document.getElementById('tweaks-panel');
+  const sCode = document.getElementById('s-code');
+  const sTrace = document.getElementById('s-trace');
+  const sMicro = document.getElementById('s-micro');
+  const sHead = document.getElementById('s-head');
+  const sLead = document.getElementById('s-lead');
+  const sList = document.getElementById('s-list');
+  const vCode = document.getElementById('v-code');
+  const vTrace = document.getElementById('v-trace');
+  const vMicro = document.getElementById('v-micro');
+  const vHead = document.getElementById('v-head');
+  const vLead = document.getElementById('v-lead');
+  const vList = document.getElementById('v-list');
+
+  function apply(t) {
+    root.style.setProperty('--code-scale', t.codeScale);
+    root.style.setProperty('--trace-scale', t.traceScale);
+    root.style.setProperty('--micro-scale', t.microScale);
+    root.style.setProperty('--headline-scale', t.headlineScale);
+    root.style.setProperty('--lead-scale', t.leadScale);
+    root.style.setProperty('--list-scale', t.listScale);
+    sCode.value = t.codeScale; vCode.textContent = Number(t.codeScale).toFixed(2) + '×';
+    sTrace.value = t.traceScale; vTrace.textContent = Number(t.traceScale).toFixed(2) + '×';
+    sMicro.value = t.microScale; vMicro.textContent = Number(t.microScale).toFixed(2) + '×';
+    sHead.value = t.headlineScale; vHead.textContent = Number(t.headlineScale).toFixed(2) + '×';
+    sLead.value = t.leadScale; vLead.textContent = Number(t.leadScale).toFixed(2) + '×';
+    sList.value = t.listScale; vList.textContent = Number(t.listScale).toFixed(2) + '×';
+  }
+  let state = {...TWEAK_DEFAULS};
+  apply(state);
+
+  function set(key, val) {
+    state[key] = val;
+    apply(state);
+    try { window.parent.postMessage({type:'__edit_mode_set_keys', edits:{[key]: val}}, '*'); } catch(e){}
+  }
+  sCode.addEventListener('input', e => set('codeScale', parseFloat(e.target.value)));
+  sTrace.addEventListener('input', e => set('traceScale', parseFloat(e.target.value)));
+  sMicro.addEventListener('input', e => set('microScale', parseFloat(e.target.value)));
+  sHead.addEventListener('input', e => set('headlineScale', parseFloat(e.target.value)));
+  sLead.addEventListener('input', e => set('leadScale', parseFloat(e.target.value)));
+  sList.addEventListener('input', e => set('listScale', parseFloat(e.target.value)));
+  document.getElementById('reset-tweaks').addEventListener('click', () => {
+    Object.entries({codeScale:1.0, traceScale:1.0, microScale:1.15, headlineScale:1.0, leadScale:1.0, listScale:1.0}).forEach(([k,v]) => set(k,v));
+  });
+
+  // Press "t" to toggle the text-scale tweaks panel.
+  document.addEventListener('keydown', (e) => {
+    if (e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
+    if (e.key === 't' || e.key === 'T') panel.classList.toggle('on');
+  });
+</script>
+
+<style>
+  @media print {
+    #tweaks-panel { display: none !important; }
+  }
+</style>
+
+</body>
+</html>
